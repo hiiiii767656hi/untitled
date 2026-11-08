@@ -3537,11 +3537,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         });
  
         const isFloorRag = srcP.normal.y > 0.6;
-        const torsoBottomDist = (tPos.y - 0.5) - srcP.pos.y;
-        const shouldRagTp = isFloorRag
-          ? (torsoBottomDist <= 0.55 && torsoBottomDist >= -1.2 && r.portalCd <= 0)
-          : (normalDist <= 0.48 && movingIn && r.portalCd <= 0);
-        if (shouldRagTp) seamlessTeleportRagdoll(r, srcP, dstP);
+        const halfCrossedRag = isFloorRag
+          ? (tPos.y <= srcP.pos.y + 0.08 && r.portalCd <= 0)
+          : ((normalDist <= 0.03 || (normalDist <= 0.08 && movingIn)) && r.portalCd <= 0);
+        if (halfCrossedRag) seamlessTeleportRagdoll(r, srcP, dstP);
       }
       if (r.life !== Infinity && (r.life -= dt) <= 0) removeRagdoll(r);
     }
@@ -3595,28 +3594,36 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
           animateMinecraftRig(localPortalCloneRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
           localPortalCloneRig.root.visible = true;
 
-          // Portal oyunundaki gibi smooth geçiş: Portal yüzeyine adım atıldığında direkt snap/tp atmaz,
-          // önce clipping planes ile oyuncunun portala girişini gösterir, yüzeyi tam geçerken (horizon crossing) ışınlar.
+          // Portal oyunundaki gibi: Karakter portala girerken clipping planes ile yarısı kesilir,
+          // ve tam yarısından geçince (gövde merkezi portal düzlemini kestiğinde) ışınlanma gerçekleşir.
           const isFloor = nearP.normal.y > 0.6;
           const isCeil  = nearP.normal.y < -0.6;
           let shouldTeleport = false;
 
           if (isFloor) {
-            // Yerdeki portal: Oyuncunun ağırlık merkezi zemin portal düzlemine temas edip içine adım atarken
+            // Yerdeki portal: Açıklık içindeyken ayaklar portala bastığında delik gibi içine batmasını sağla
             const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
             const centerDist = curPlayerPos.y - nearP.pos.y;
-            if (feetDist <= 0.12 && centerDist <= 0.85 * playerScale && feetDist >= -1.2 * playerScale && portalCooldown <= 0) {
+            if (feetDist <= 0.15 && feetDist >= -1.2 * playerScale) {
+              // Ayaklar portal yüzeyine bastığında yerçekimiyle deliğe batış hissi
+              playerBody.velocity.y = Math.min(playerBody.velocity.y, -3.8);
+              if (centerDist > 0.05) playerBody.position.y -= dt * 2.5;
+            }
+            // Tam yarısından geçince ışınlanma: Karakterin bel/merkez noktası portal zemin düzlemine indiğinde (50% geçiş)
+            if (centerDist <= 0.08 * playerScale && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else if (isCeil) {
-            const headDist = nearP.pos.y - (curPlayerPos.y + playerRadius);
-            if (headDist <= 0.12 && headDist >= -1.2 * playerScale && portalCooldown <= 0) {
+            // Tavandaki portal: Karakter yukarı zıpladığında tam yarısı (merkezi) tavan düzlemini geçtiğinde ışınlar
+            const centerDist = nearP.pos.y - curPlayerPos.y;
+            if (centerDist <= 0.08 * playerScale && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else {
-            // Duvardaki portal: Karakter portalın içine doğru adım atıp düzlemi keserken (normalDist <= 0.15)
-            const crossingHorizon = normalDist <= 0.15 || (normalDist <= 0.25 && movingIntoPortal);
-            if (crossingHorizon && portalCooldown <= 0) {
+            // Duvardaki portal: Karakter portalın içine doğru adım atar, gövdesinin ön yarısı kırpılır
+            // ve tam yarısı (gövde merkezi / kamera ekseni) portal düzlemini aştığında (normalDist <= 0.02) ışınlar.
+            const halfCrossed = (normalDist <= 0.02) || (normalDist <= 0.07 && movingIntoPortal);
+            if (halfCrossed && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           }
@@ -3694,11 +3701,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         c.portalClone.visible = true;
  
         const isFloorCar = srcP.normal.y > 0.6;
-        const wheelDist = (cPos.y - 0.7 * (c.scaleFactor || 1)) - srcP.pos.y;
-        const shouldCarTp = isFloorCar
-          ? (wheelDist <= 0.75 && wheelDist >= -1.8 && c.portalCd <= 0)
-          : (normalDist <= 0.65 && movingIn && c.portalCd <= 0);
-        if (shouldCarTp) seamlessTeleportCar(c, srcP, dstP);
+        const halfCrossedCar = isFloorCar
+          ? (cPos.y <= srcP.pos.y + 0.15 && c.portalCd <= 0)
+          : ((normalDist <= 0.04 || (normalDist <= 0.12 && movingIn)) && c.portalCd <= 0);
+        if (halfCrossedCar) seamlessTeleportCar(c, srcP, dstP);
       }
     }
  
@@ -3739,11 +3745,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         }
  
         const isFloorProp = srcP.normal.y > 0.6;
-        const bottomDist = (pos.y - p.boundR) - srcP.pos.y;
-        const shouldPropTp = isFloorProp
-          ? (bottomDist <= 0.45 && bottomDist >= -1.2 && p.portalCd <= 0)
-          : (normalDist <= 0.45 && (movingIn || grabbedProp === p) && p.portalCd <= 0);
-        if (shouldPropTp) seamlessTeleportProp(p, srcP, dstP);
+        const halfCrossedProp = isFloorProp
+          ? (pos.y <= srcP.pos.y + 0.06 && p.portalCd <= 0)
+          : ((normalDist <= 0.03 || (normalDist <= 0.08 && (movingIn || grabbedProp === p))) && p.portalCd <= 0);
+        if (halfCrossedProp) seamlessTeleportProp(p, srcP, dstP);
       }
     }
  
