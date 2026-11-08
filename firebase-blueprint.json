@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information, custom skin preference, and game statistics.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 64 },
+        "skin": { "type": "string", "maxLength": 65536 },
+        "playerScale": { "type": "number" },
+        "blueScaleX": { "type": "number" },
+        "blueScaleY": { "type": "number" },
+        "orangeScaleX": { "type": "number" },
+        "orangeScaleY": { "type": "number" },
+        "teleportsCount": { "type": "number" },
+        "propsSpawned": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores individual player account settings, preferences, and gameplay stats."
+    }
+  }
+}

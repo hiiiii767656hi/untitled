@@ -1,18 +1,3647 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-    <meta name="description" content="An application built with Google AI Studio." />
-    <meta property="og:title" content="My Google AI Studio App" />
-    <meta property="og:description" content="An application built with Google AI Studio." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Minecraft Sandbox - Portals & Physics</title>
+<meta name="description" content="Multiplayer 3D physics sandbox with Minecraft skins, realistic synchronized portals, vehicles, and ragdolls.">
+<meta property="og:title" content="Minecraft Sandbox - Portals & Physics">
+<meta property="og:description" content="Multiplayer 3D physics sandbox with Minecraft skins, realistic synchronized portals, vehicles, and ragdolls.">
+<meta property="og:type" content="website">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<style>
+body{margin:0;overflow:hidden;background:#000;color:#fff;font-family:Inter,system-ui,sans-serif;touch-action:none}
+canvas{display:block;width:100vw;height:100vh;position:absolute;top:0;left:0;z-index:1}
+.no-select{user-select:none;-webkit-user-select:none}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:12px;height:12px;pointer-events:none;z-index:20}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(0,255,255,.8)}
+#crosshair::before{top:5px;left:0;width:12px;height:2px}
+#crosshair::after{top:0;left:5px;width:2px;height:12px}
+#topBar{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;z-index:30;pointer-events:none}
+.ui-btn{background:rgba(0,0,0,.65);border:2px solid rgba(0,255,255,.5);color:#fff;padding:6px 10px;border-radius:8px;font-weight:bold;cursor:pointer;pointer-events:auto;backdrop-filter:blur(4px);transition:transform .1s,background .2s}
+.ui-btn:hover{background:rgba(0,255,255,.15)}
+.ui-btn:active{transform:scale(.95)}
+.icon-btn{font-size:1.05rem;padding:5px 10px}
+#statusHud{position:absolute;top:58px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:25;pointer-events:none}
+.stat-pill{position:relative;width:130px;background:rgba(10,15,30,.88);border:2px solid rgba(255,255,255,.3);border-radius:999px;padding:3px;overflow:hidden}
+.stat-fill{height:14px;width:100%;border-radius:999px;transition:width .2s}
+.stat-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;text-shadow:1px 1px 2px #000}
+#ammoBadge,#scaleBadge{background:rgba(10,15,30,.9);border:2px solid #facc15;color:#fde047;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;pointer-events:auto;cursor:pointer}
+#scaleBadge{border-color:#c084fc;color:#e9d5ff}
+#vehiclePrompt{position:absolute;bottom:110px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.78);border:2px solid #0ff;color:#0ff;padding:8px 18px;border-radius:999px;font-weight:bold;font-size:.86rem;z-index:25;cursor:pointer;white-space:nowrap}
+#hudBar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(10,15,30,.85);border:1px solid rgba(52,211,153,.5);color:#d1fae5;padding:6px 14px;border-radius:999px;font-size:.76rem;z-index:25;pointer-events:none;white-space:nowrap}
+#settingsModal,#keybindsModal,#adminModal,#portalConfigModal{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,15,30,.96);border:2px solid #0ff;border-radius:14px;padding:18px 22px;z-index:100;width:410px;max-width:94vw;max-height:86vh;overflow-y:auto}
+#adminModal{border-color:#facc15;box-shadow:0 0 30px rgba(250,204,21,.25)}
+#portalConfigModal{border-color:#fb923c;box-shadow:0 0 30px rgba(249,115,22,.25)}
+.modal-header{font-size:1.1rem;font-weight:bold;margin-bottom:12px;color:#0ff;border-bottom:1px solid rgba(0,255,255,.3);padding-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.setting-row{margin-bottom:10px}
+.setting-label{display:flex;justify-content:space-between;font-size:.8rem;color:#cbd5e1;margin-bottom:3px;font-weight:600}
+#chatContainer{position:absolute;bottom:20px;left:20px;width:300px;max-height:230px;display:flex;flex-direction:column;justify-content:flex-end;z-index:30;pointer-events:none}
+#chatMessages{overflow-y:auto;max-height:180px;padding-bottom:8px;pointer-events:auto;text-shadow:1px 1px 2px #000;font-size:.85rem}
+.chat-msg{margin-bottom:4px;line-height:1.2;word-wrap:break-word}
+#chatInput{flex-grow:1;background:rgba(0,0,0,.65);border:1px solid #333;color:#fff;padding:7px;border-radius:4px;outline:none;pointer-events:auto}
+#mobileControls{display:none;position:absolute;inset:0;z-index:18;pointer-events:none}
+body.mobile-mode #mobileControls{display:block}
+body.mobile-mode #chatContainer{bottom:165px;left:14px;width:230px}
+body.mobile-mode #hudBar{display:none}
+body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
+.joystick-zone{position:absolute;bottom:22px;left:22px;width:126px;height:126px;background:rgba(255,255,255,.12);border:2px solid rgba(0,255,255,.35);border-radius:50%;display:flex;align-items:center;justify-content:center;touch-action:none;pointer-events:auto;z-index:10;backdrop-filter:blur(2px)}
+.joystick-knob{width:52px;height:52px;background:rgba(0,255,255,.6);border:2px solid #fff;border-radius:50%;pointer-events:none}
+#rightTouchZone{position:absolute;right:0;top:0;width:58%;height:100%;pointer-events:auto;touch-action:none;z-index:1}
+.action-btn{position:absolute;width:56px;height:56px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;pointer-events:auto;touch-action:none;border:2px solid rgba(255,255,255,.55);font-size:.66rem;line-height:1.05;text-align:center;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.5);user-select:none}
+.action-btn:active{transform:scale(.9)}
+#jumpBtnMobile{bottom:22px;right:94px;background:rgba(59,130,246,.78)}
+#shootBtnMobile{bottom:90px;right:22px;background:rgba(14,165,233,.85);border-color:#38bdf8}
+#altShootBtnMobile{bottom:90px;right:94px;background:rgba(249,115,22,.85);border-color:#fdba74}
+#carBtnMobile{bottom:90px;right:166px;background:rgba(16,185,129,.8)}
+#ragBtnMobile{bottom:22px;right:22px;background:rgba(168,85,247,.75)}
+#weaponSwitchMobile{bottom:158px;right:22px;background:rgba(234,179,8,.82);color:#000}
+#portalSizeMobile{bottom:158px;right:94px;background:rgba(236,72,153,.8)}
+#spawnBtnMobile{bottom:158px;right:166px;background:rgba(52,211,153,.8);color:#000}
+#buildMenu{display:none;position:absolute;top:70px;right:20px;width:330px;max-width:92vw;max-height:80vh;overflow-y:auto;background:rgba(10,15,30,.95);border:2px solid #34d399;border-radius:12px;padding:14px;z-index:90;pointer-events:auto}
+.obj-card{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.06);border:1px solid rgba(52,211,153,.35);border-radius:8px;padding:7px 10px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s}
+.obj-card:hover,.obj-card.active{background:rgba(52,211,153,.22);border-color:#34d399}
+.kb-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.82rem}
+.kb-btn{background:rgba(0,255,255,.12);border:1px solid rgba(0,255,255,.5);color:#67e8f9;padding:3px 10px;border-radius:6px;font-family:monospace;font-weight:bold;cursor:pointer;min-width:64px;text-align:center}
+.kb-btn.listening{background:#f59e0b;color:#000;border-color:#fff}
+#startScreen{z-index:9999;position:fixed;inset:0}
+.skin-preview-box{width:64px;height:64px;image-rendering:pixelated;border:2px solid #38bdf8;border-radius:6px;background:#1e293b}
+</style>
+</head>
+<body>
+<div id="startScreen" class="flex flex-col items-center justify-center bg-gray-950 no-select px-4 py-6">
+  <h1 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-500 mb-1 text-center tracking-tighter">MINECRAFT SANDBOX</h1>
+  <p class="text-sm md:text-base text-emerald-300 mb-3 tracking-widest uppercase font-semibold text-center">Bloklu Karakter + Özel Skin Yükleyici + Portallar 🟩⛏️</p>
+ 
+  <div class="w-96 max-w-full bg-black/80 border-2 border-emerald-500/50 rounded-xl p-3.5 mb-3">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-xs uppercase tracking-wider text-emerald-300 font-bold">👤 Oyuncu Kimliği</span>
+      <span id="userAuthBadge" class="text-xs px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono font-bold">Steve_0000</span>
+    </div>
+ 
+    <!-- HIZLI SKİN SEÇİMİ VE YÜKLEME KUTUSU -->
+    <div class="bg-gray-900/90 border border-emerald-500/30 rounded-lg p-2.5 mb-2.5">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <canvas id="startSkinCanvas" class="skin-preview-box"></canvas>
+        <div class="flex-grow min-w-0">
+          <label class="text-[11px] font-bold text-gray-300 block mb-1">Minecraft Karakter Skini</label>
+          <select id="startSkinSelect" class="w-full bg-gray-950 border border-emerald-500/50 rounded p-1 text-xs text-white">
+            <option value="steve">🧑 Steve (Klasik)</option>
+            <option value="alex">👩 Alex</option>
+            <option value="zombie">🧟 Zombi</option>
+            <option value="creeper">💥 Creeper</option>
+            <option value="diamond">⚔️ Elmas Zırh</option>
+            <option value="skeleton">🏹 İskelet</option>
+            <option value="custom">📁 Özel Yüklenen Skin</option>
+          </select>
+        </div>
+      </div>
+      <label class="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded text-xs cursor-pointer">
+        <span>📂</span> <span>Kendi Minecraft Skinini Yükle (.png)</span>
+        <input type="file" id="startSkinFileInput" accept="image/png" class="hidden">
+      </label>
+    </div>
+ 
+    <button id="anonLoginBtn" type="button" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-800 hover:bg-gray-700 text-cyan-300 border border-cyan-500/40 font-bold rounded-lg text-xs cursor-pointer mb-2">
+      <span>🎲</span> Yeni Anonim Kimlik Oluştur
+    </button>
+ 
+    <details class="text-xs text-gray-400">
+      <summary class="cursor-pointer text-yellow-400 font-semibold select-none">👑 Yetkili (Admin) Girişi</summary>
+      <div class="flex gap-1.5 mt-2">
+        <input id="startAdminPassInput" type="password" placeholder="Yetkili Şifresi" class="flex-grow min-w-0 px-2.5 py-1.5 bg-gray-900 border border-yellow-500/50 rounded text-xs text-white focus:outline-none focus:border-yellow-400">
+        <button id="startAdminAuthBtn" type="button" class="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded text-xs cursor-pointer">Doğrula</button>
+      </div>
+    </details>
+  </div>
+ 
+  <div class="flex flex-col items-center gap-2 mb-3 w-96 max-w-full">
+    <label for="serverIpInput" class="text-xs uppercase tracking-wider text-cyan-300 font-bold">Sunucu Adresi &amp; Protokol</label>
+    <div class="flex w-full gap-1.5">
+      <select id="protocolSelect" class="px-2 py-2 bg-gray-900 border-2 border-fuchsia-500/60 rounded-lg text-xs font-bold text-fuchsia-300 focus:outline-none">
+        <option value="tcp">TCP (WS)</option>
+        <option value="udp">UDP (Hızlı)</option>
+      </select>
+      <input id="serverIpInput" type="text" value="127.0.0.1:3000" autocapitalize="off" autocorrect="off" spellcheck="false" class="flex-grow min-w-0 px-3 py-2 bg-black/70 border-2 border-cyan-500/60 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-cyan-300">
+      <button id="connectBtn" type="button" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-sm cursor-pointer">Connect</button>
+    </div>
+    <div class="flex w-full gap-2">
+      <button id="saveServerBtn" type="button" class="flex-1 py-1 bg-gray-800 border border-cyan-500/40 rounded text-xs font-bold text-cyan-300 cursor-pointer">💾 Kaydet</button>
+      <button id="localServerBtn" type="button" class="flex-1 py-1 bg-gray-800 border border-fuchsia-500/40 rounded text-xs font-bold text-fuchsia-300 cursor-pointer">🏠 Yerel (127.0.0.1:3000)</button>
+    </div>
+    <div id="savedServers" class="flex flex-wrap gap-2 w-full"></div>
+  </div>
+ 
+  <p id="authStatus" class="text-gray-400 mb-3 font-mono text-xs text-center">Minecraft skinlerini doğrudan yükleyebilir ve portallarda devasa veya minik olabilirsiniz!</p>
+ 
+  <div class="flex flex-wrap gap-3 justify-center">
+    <button id="playBtn" type="button" class="px-8 py-3.5 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 text-white font-black rounded-full text-lg border-2 border-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)] cursor-pointer">OYUNA BAŞLA</button>
+    <button id="startMobileBtn" type="button" class="px-5 py-3.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-200 font-bold rounded-full text-base border-2 border-emerald-400/50 cursor-pointer">📱 Mobil Mod</button>
+    <button id="startFullscreenBtn" type="button" class="px-5 py-3.5 bg-gray-800 text-cyan-300 font-bold rounded-full text-base border-2 border-cyan-500/40 cursor-pointer">⛶ Tam Ekran</button>
+  </div>
+</div>
+ 
+<div id="topBar" class="no-select">
+  <div class="flex gap-1.5 flex-wrap">
+    <button id="mainMenuBtn" type="button" class="ui-btn text-xs" style="border-color:#f43f5e" title="Ana Menüye Dön (ESC)">🏠 Ana Menü</button>
+    <button id="buildBtn" type="button" class="ui-btn text-xs" style="border-color:#34d399">🧱 Objeler (B)</button>
+    <button id="randomPropBtn" type="button" class="ui-btn text-xs" style="border-color:#f43f5e">🎲 Rastgele (G)</button>
+    <button id="fingerModeBtn" type="button" class="ui-btn text-xs" style="border-color:#38bdf8">🌀 Mod: Portal (V)</button>
+    <button id="portalSizeBtn" type="button" class="ui-btn text-xs" style="border-color:#f97316" title="Her Portal İçin Ayrı X/Y Büyüklük Ayarla">📏 Portal X/Y</button>
+    <button id="camViewBtn" type="button" class="ui-btn text-xs" style="border-color:#38bdf8">🎥 Kamera (C)</button>
+    <button id="spawnCarBtn" type="button" class="ui-btn text-xs" style="border-color:#e879f9">Araba 🚗</button>
+    <button id="ragdollBtn" type="button" class="ui-btn text-xs" style="border-color:#a855f7">Ragdoll (R)</button>
+    <button id="mobileModeBtn" type="button" class="ui-btn text-xs" style="border-color:#10b981">📱 Mobil: KAPALI</button>
+    <button id="adminBtn" type="button" class="ui-btn text-xs hidden" style="border-color:#facc15;color:#fde047">👑 Admin (P)</button>
+  </div>
+  <div class="flex gap-1.5">
+    <button id="keybindsBtn" type="button" class="ui-btn icon-btn" title="Tuş Atamaları (K)">⌨️</button>
+    <button id="fullscreenBtn" type="button" class="ui-btn icon-btn" title="Tam Ekran (F)">⛶</button>
+    <button id="settingsBtn" type="button" class="ui-btn icon-btn" title="Grafik, Skin & Oyun Ayarları">⚙️</button>
+  </div>
+</div>
+ 
+<div id="statusHud" class="no-select hidden">
+  <div class="stat-pill" style="border-color:rgba(244,63,94,.7)">
+    <div id="hpBarFill" class="stat-fill" style="background:linear-gradient(90deg,#ef4444,#22c55e)"></div>
+    <div id="hpText" class="stat-text">❤️ 100 HP</div>
+  </div>
+  <div class="stat-pill" style="border-color:rgba(56,189,248,.7)">
+    <div id="armorBarFill" class="stat-fill" style="background:linear-gradient(90deg,#0284c7,#38bdf8);width:50%"></div>
+    <div id="armorText" class="stat-text">🛡️ 50 Zırh</div>
+  </div>
+  <div id="ammoBadge">🔋 100 Ammo</div>
+  <div id="scaleBadge" title="Boyutu 1.0x yapmak için tıkla">📐 Boyut: 1.00x</div>
+</div>
+ 
+<div id="vehiclePrompt" class="hidden no-select"></div>
+<div id="hudBar" class="no-select">
+  Kimlik: <b id="hudUserName" class="text-cyan-300">Steve</b> · Boyut: <b id="hudPlayerScale" class="text-purple-300">1.00x</b> · Portallar: <b id="hudPortalScale" class="text-orange-300">🔵1.5x1.5 | 🟠1.5x1.5</b> · Silah: <b id="hudWeaponName" class="text-amber-300">🌀 Portal Gun</b>
+</div>
+ 
+<div id="portalConfigModal" class="no-select">
+  <div class="modal-header" style="color:#fb923c;border-color:rgba(249,115,22,.35)">
+    <span>🌀 Ayrı Portal Boyutları (X &amp; Y)</span>
+    <button id="closePortalConfigTop" type="button" class="text-xs text-gray-300 hover:text-white cursor-pointer">✕</button>
+  </div>
+  <p class="text-xs text-gray-300 mb-3 leading-relaxed">
+    Küçük portaldan büyük portala geçtiğinizde <b class="text-amber-300">büyürsünüz</b>, büyükten küçüğe geçince <b class="text-cyan-300">küçülürsünüz</b>!
+  </p>
+ 
+  <div class="bg-sky-950/50 border border-sky-500/40 rounded-lg p-3 mb-3">
+    <div class="text-xs font-bold text-sky-300 mb-2 flex justify-between">
+      <span>🔵 Mavi Portal Boyutu</span>
+      <span id="bluePortalDimLabel" class="font-mono">X: 1.5 | Y: 1.5</span>
+    </div>
+    <div class="setting-row">
+      <div class="setting-label"><span>Genişlik (X)</span><span id="blueScaleXVal">1.5x</span></div>
+      <input type="range" id="blueScaleXSlider" min="0.4" max="5.0" step="0.1" value="1.5" class="w-full accent-sky-400">
+    </div>
+    <div class="setting-row mb-0">
+      <div class="setting-label"><span>Yükseklik (Y)</span><span id="blueScaleYVal">1.5x</span></div>
+      <input type="range" id="blueScaleYSlider" min="0.4" max="5.0" step="0.1" value="1.5" class="w-full accent-sky-400">
+    </div>
+  </div>
+ 
+  <div class="bg-orange-950/50 border border-orange-500/40 rounded-lg p-3 mb-3">
+    <div class="text-xs font-bold text-orange-300 mb-2 flex justify-between">
+      <span>🟠 Turuncu Portal Boyutu</span>
+      <span id="orangePortalDimLabel" class="font-mono">X: 1.5 | Y: 1.5</span>
+    </div>
+    <div class="setting-row">
+      <div class="setting-label"><span>Genişlik (X)</span><span id="orangeScaleXVal">1.5x</span></div>
+      <input type="range" id="orangeScaleXSlider" min="0.4" max="5.0" step="0.1" value="1.5" class="w-full accent-orange-400">
+    </div>
+    <div class="setting-row mb-0">
+      <div class="setting-label"><span>Yükseklik (Y)</span><span id="orangeScaleYVal">1.5x</span></div>
+      <input type="range" id="orangeScaleYSlider" min="0.4" max="5.0" step="0.1" value="1.5" class="w-full accent-orange-400">
+    </div>
+  </div>
+ 
+  <div class="grid grid-cols-3 gap-1.5 mb-3">
+    <button id="presetGrowBtn" type="button" class="py-1.5 px-2 bg-purple-800 hover:bg-purple-700 rounded text-[11px] font-bold cursor-pointer">🔵Küçük ➔ 🟠Dev</button>
+    <button id="presetShrinkBtn" type="button" class="py-1.5 px-2 bg-indigo-800 hover:bg-indigo-700 rounded text-[11px] font-bold cursor-pointer">🔵Dev ➔ 🟠Küçük</button>
+    <button id="presetEqualBtn" type="button" class="py-1.5 px-2 bg-gray-800 hover:bg-gray-700 rounded text-[11px] font-bold cursor-pointer">⚖️ Eşitle (1.5x)</button>
+  </div>
+ 
+  <div class="flex gap-2">
+    <button id="resetMySizeBtn" type="button" class="flex-1 py-2 bg-fuchsia-700 hover:bg-fuchsia-600 rounded font-bold text-xs cursor-pointer">📐 Karakter Boyutumu Sıfırla (1x)</button>
+    <button id="closePortalConfigBtn" type="button" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded font-bold text-xs cursor-pointer">Kapat</button>
+  </div>
+</div>
+ 
+<div id="adminModal" class="no-select">
+  <div class="modal-header" style="color:#facc15;border-color:rgba(250,204,21,.3)">
+    <span>👑 Yetkili Admin Paneli</span>
+    <span id="adminBadge" class="text-xs px-2 py-0.5 rounded bg-emerald-800 text-emerald-200 font-bold">👑 Yetkili</span>
+  </div>
+ 
+  <div class="grid grid-cols-2 gap-2 mb-3">
+    <button id="admGodBtn" type="button" class="py-2 bg-gray-800 hover:bg-gray-700 border border-yellow-500/40 rounded font-bold text-xs cursor-pointer">🛡️ Ölümsüzlük: KAPALI</button>
+    <button id="admFlyBtn" type="button" class="py-2 bg-gray-800 hover:bg-gray-700 border border-cyan-500/40 rounded font-bold text-xs cursor-pointer">🕊️ Uçma (Fly): KAPALI</button>
+    <button id="admSpeedBtn" type="button" class="py-2 bg-gray-800 hover:bg-gray-700 border border-fuchsia-500/40 rounded font-bold text-xs cursor-pointer">⚡ Süper Hız: 1x</button>
+    <button id="admHealSelfBtn" type="button" class="py-2 bg-emerald-700 hover:bg-emerald-600 rounded font-bold text-xs cursor-pointer">❤️ Can &amp; Zırh Fullle</button>
+  </div>
+ 
+  <div class="text-xs font-bold text-cyan-300 mb-2 uppercase">👥 Oyuncu Yönetimi</div>
+  <div id="adminPlayerList" class="space-y-1.5 max-h-40 overflow-y-auto mb-3 bg-black/40 p-2 rounded border border-gray-800 text-xs"></div>
+ 
+  <div class="grid grid-cols-2 gap-2 mb-3">
+    <button id="admHealAllBtn" type="button" class="py-1.5 bg-teal-700 hover:bg-teal-600 rounded font-bold text-xs cursor-pointer">💚 Herkesi İyileştir</button>
+    <button id="admKillAllBtn" type="button" class="py-1.5 bg-red-800 hover:bg-red-700 rounded font-bold text-xs cursor-pointer">💀 Herkesi Parçala</button>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <input id="admAnnounceInput" type="text" placeholder="Sunucu duyuru mesajı..." class="flex-grow px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs">
+    <button id="admAnnounceBtn" type="button" class="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 rounded font-bold text-xs cursor-pointer">📢 Duyur</button>
+  </div>
+  <button id="closeAdminBtn" type="button" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded font-bold text-sm cursor-pointer">Kapat</button>
+</div>
+ 
+<!-- AYARLAR & MINECRAFT SKİN YÜKLEYİCİ MODAL -->
+<div id="settingsModal" class="no-select">
+  <div class="modal-header"><span>⚙️ Ayarlar &amp; Minecraft Skin</span><span id="fpsCounter" class="text-xs font-mono text-emerald-400">60 FPS</span></div>
+ 
+  <!-- MINECRAFT SKİN AYARLARI -->
+  <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-lg p-3 mb-3">
+    <div class="text-xs font-bold text-emerald-300 mb-2 uppercase flex items-center justify-between">
+      <span>🟩 Minecraft Karakter Modeli</span>
+      <span class="text-[10px] text-gray-400">64x64 PNG Desteği</span>
+    </div>
+    <div class="flex items-center gap-3 mb-2.5">
+      <canvas id="settingsSkinCanvas" class="skin-preview-box"></canvas>
+      <div class="flex-grow">
+        <label class="text-[11px] text-gray-300 block mb-1">Hazır Minecraft Kostümleri</label>
+        <select id="skinSelect" class="w-full bg-gray-900 border border-emerald-500/50 rounded p-1.5 text-xs text-white">
+          <option value="steve">🧑 Steve (Klasik)</option>
+          <option value="alex">👩 Alex</option>
+          <option value="zombie">🧟 Zombi</option>
+          <option value="creeper">💥 Creeper</option>
+          <option value="diamond">⚔️ Elmas Zırh</option>
+          <option value="skeleton">🏹 İskelet</option>
+          <option value="custom">📁 Özel Yüklenen Skin</option>
+        </select>
+      </div>
+    </div>
+    <label class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-lg text-xs cursor-pointer border border-emerald-400/40">
+      <span>📥</span> <span>Minecraft Skin Dosyası (.png) Yükle</span>
+      <input type="file" id="skinFileInput" accept="image/png" class="hidden">
+    </label>
+  </div>
+ 
+  <!-- GRAFİK AYARLARI BÖLÜMÜ -->
+  <div class="bg-slate-900/90 border border-cyan-500/30 rounded-lg p-3 mb-3">
+    <div class="text-xs font-bold text-cyan-300 mb-2 uppercase">🖥️ Grafik Ayarları</div>
+    <div class="setting-row">
+      <div class="setting-label"><span>Grafik Kalitesi (Ön Ayar)</span></div>
+      <select id="graphicsPresetSelect" class="w-full bg-gray-950 border border-cyan-500/50 rounded p-1.5 text-xs text-white font-semibold">
+        <option value="low">⚡ Düşük (Maksimum FPS)</option>
+        <option value="medium">⚖️ Orta (Dengeli)</option>
+        <option value="high" selected>✨ Yüksek (Kaliteli)</option>
+        <option value="ultra">💎 Ultra (Maksimum Görsellik)</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <div class="setting-label"><span>Çözünürlük Ölçeği</span><span id="resScaleVal">1.0x</span></div>
+      <input type="range" id="resScaleSlider" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full accent-cyan-400">
+    </div>
+    <div class="setting-row">
+      <div class="setting-label"><span>Çizim Mesafesi &amp; Sis</span><span id="drawDistVal">600m</span></div>
+      <input type="range" id="drawDistSlider" min="200" max="1200" step="50" value="600" class="w-full accent-cyan-400">
+    </div>
+    <div class="grid grid-cols-2 gap-1 text-xs mt-2">
+      <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="shadowsToggle" checked class="w-4 h-4"><span>Gölgeler</span></label>
+      <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" id="pointLightsToggle" checked class="w-4 h-4"><span>Neon Işıklar</span></label>
+    </div>
+  </div>
+ 
+  <div class="setting-row"><div class="setting-label"><span>Kamera Hassasiyeti</span><span id="sensVal">1.0x</span></div><input type="range" id="sensSlider" min="0.2" max="3" step="0.1" value="1" class="w-full accent-cyan-400"></div>
+  <div class="setting-row"><div class="setting-label"><span>Görüş Açısı (FOV)</span><span id="fovVal">75°</span></div><input type="range" id="fovSlider" min="60" max="110" step="1" value="75" class="w-full accent-cyan-400"></div>
+  <label class="flex items-center space-x-3 cursor-pointer mb-1.5 text-xs"><input type="checkbox" id="mobileModeToggle" class="w-4 h-4"><span>📱 Mobil Mod (Dokunmatik Kontroller)</span></label>
+  <label class="flex items-center space-x-3 cursor-pointer mb-1.5 text-xs"><input type="checkbox" id="ragdollToggle" checked class="w-4 h-4"><span>Vurulunca Ragdoll</span></label>
+  <label class="flex items-center space-x-3 cursor-pointer mb-3 text-xs"><input type="checkbox" id="fingerGunToggle" checked class="w-4 h-4"><span>3B Silah/El Modelini Göster 👉</span></label>
+ 
+  <div class="grid grid-cols-2 gap-2 mb-2">
+    <button id="openPortalCfgFromSettings" type="button" class="py-2 bg-orange-600 hover:bg-orange-500 rounded font-bold text-xs cursor-pointer">📏 Portal X/Y Ayarı</button>
+    <button id="openKeybindsFromSettings" type="button" class="py-2 bg-indigo-700 hover:bg-indigo-600 rounded font-bold text-xs cursor-pointer">⌨️ Tuş Atamaları</button>
+  </div>
+  <div class="grid grid-cols-2 gap-2 mb-2">
+    <button id="respawnBtn" type="button" class="py-2 bg-amber-600 hover:bg-amber-500 rounded font-bold text-xs cursor-pointer">🔄 Yeniden Doğ</button>
+    <button id="returnMainMenuBtn" type="button" class="py-2 bg-rose-700 hover:bg-rose-600 rounded font-bold text-xs cursor-pointer">🏠 Ana Menüye Dön</button>
+  </div>
+  <button id="closeSettingsBtn" type="button" class="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded font-bold text-sm cursor-pointer">Kapat</button>
+</div>
+ 
+<div id="keybindsModal" class="no-select">
+  <div class="modal-header"><span>⌨️ Tuş Atamaları</span><button id="resetKeybindsBtn" type="button" class="text-xs text-amber-300 underline cursor-pointer">Sıfırla</button></div>
+  <div id="keybindsList" class="mb-4"></div>
+  <button id="closeKeybindsBtn" type="button" class="w-full py-2 bg-gray-700 rounded font-bold text-sm cursor-pointer">Kapat</button>
+</div>
+ 
+<div id="buildMenu" class="no-select">
+  <div class="modal-header" style="color:#34d399;border-color:rgba(52,211,153,.3)">
+    <span>🧱 Obje &amp; Rampa Menüsü</span>
+    <button id="closeBuildBtn" type="button" class="text-xs text-gray-300 hover:text-white cursor-pointer">✕</button>
+  </div>
+  <div class="grid grid-cols-2 gap-2 mb-3">
+    <button id="menuRandomSingleBtn" type="button" class="py-2 bg-pink-600 hover:bg-pink-500 rounded font-bold text-xs cursor-pointer">🎲 Rastgele Eşya (G)</button>
+    <button id="menuRandomRainBtn" type="button" class="py-2 bg-purple-600 hover:bg-purple-500 rounded font-bold text-xs cursor-pointer">🌧️ 5 Eşya Yağdır!</button>
+  </div>
+  <div class="text-xs font-bold text-cyan-300 mb-2 uppercase">📐 Rampalar &amp; Yapılar</div>
+  <div id="buildGridStatic" class="grid grid-cols-2 gap-2 mb-3"></div>
+  <div class="text-xs font-bold text-amber-300 mb-2 uppercase">🎲 Fiziksel Eşyalar</div>
+  <div id="buildGridDynamic" class="grid grid-cols-2 gap-2 mb-3"></div>
+  <div class="flex gap-2 mb-2">
+    <button id="spawnSelectedBtn" type="button" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold text-xs cursor-pointer">➕ Seçileni Koy (Q)</button>
+    <button id="deleteAimedBtn" type="button" class="py-2 px-3 bg-amber-700 hover:bg-amber-600 rounded font-bold text-xs cursor-pointer">Sil (X)</button>
+  </div>
+  <button id="clearPropsBtn" type="button" class="w-full py-2 bg-red-700 hover:bg-red-600 rounded font-bold text-xs cursor-pointer">🗑 Tüm Objeleri Temizle</button>
+</div>
+ 
+<div id="chatContainer" class="no-select">
+  <div id="chatMessages"></div>
+  <input type="text" id="chatInput" placeholder="Sohbet mesajı için Enter..." autocomplete="off" maxlength="100">
+</div>
+<div id="crosshair" class="hidden"></div>
+ 
+<div id="mobileControls" class="no-select">
+  <div id="rightTouchZone"></div>
+  <div id="joyLeft" class="joystick-zone"><div id="knobLeft" class="joystick-knob"></div></div>
+  <div id="jumpBtnMobile" class="action-btn">⬆️<br>ZIPLA</div>
+  <div id="shootBtnMobile" class="action-btn">🔵<br>MAVİ</div>
+  <div id="altShootBtnMobile" class="action-btn">🟠<br>TURUNCU</div>
+  <div id="carBtnMobile" class="action-btn">🚗<br>E / BİN</div>
+  <div id="ragBtnMobile" class="action-btn">🤸<br>RAG</div>
+  <div id="weaponSwitchMobile" class="action-btn">🔄<br>SİLAH</div>
+  <div id="portalSizeMobile" class="action-btn">📏<br>BOYUT</div>
+  <div id="spawnBtnMobile" class="action-btn">🧱<br>OBJE</div>
+</div>
+ 
+<script>
+(function(_w, _d) {
+  'use strict';
+  const _0xK = Math.floor(Math.random() * 999999) + 1337;
+  const _0xV = Object.seal({
+    _a: 0 ^ _0xK, _g: 0 ^ _0xK, _f: 0 ^ _0xK, _s: 1, _h: 100 ^ _0xK, _ar: 50 ^ _0xK, _am: 100 ^ _0xK,
+    getAdm() { return (this._a ^ _0xK) === 1; },
+    setAdm(v) { this._a = (v ? 1 : 0) ^ _0xK; if (!v) { this._g = 0 ^ _0xK; this._f = 0 ^ _0xK; this._s = 1; } },
+    getGod() { return this.getAdm() && (this._g ^ _0xK) === 1; },
+    setGod(v) { this._g = (this.getAdm() && v ? 1 : 0) ^ _0xK; },
+    getFly() { return this.getAdm() && (this._f ^ _0xK) === 1; },
+    setFly(v) { this._f = (this.getAdm() && v ? 1 : 0) ^ _0xK; },
+    getSpd() { return this.getAdm() ? this._s : 1; },
+    setSpd(v) { this._s = this.getAdm() ? v : 1; },
+    getHp()  { return Math.max(0, Math.min(100, this._h ^ _0xK)); },
+    setHp(v) { this._h = Math.max(0, Math.min(100, Math.round(v))) ^ _0xK; },
+    getArm() { return Math.max(0, Math.min(100, this._ar ^ _0xK)); },
+    setArm(v){ this._ar = Math.max(0, Math.min(100, Math.round(v))) ^ _0xK; },
+    getAmmo(){ return Math.max(0, Math.min(999, this._am ^ _0xK)); },
+    setAmmo(v){ this._am = Math.max(0, Math.min(999, Math.round(v))) ^ _0xK; }
+  });
+ 
+  const $ = (id) => _d.getElementById(id);
+  _d.addEventListener('contextmenu', (e) => e.preventDefault());
+ 
+  let _uid = 'Steve_' + Math.random().toString(36).substring(2, 6);
+  let _admPw = '';
+  const _syncAnonUI = () => {
+    $('userAuthBadge').textContent = '👤 ' + _uid;
+    $('hudUserName').textContent = _uid;
+  };
+  _syncAnonUI();
+ 
+  $('anonLoginBtn').addEventListener('click', () => {
+    _uid = 'Steve_' + Math.random().toString(36).substring(2, 6);
+    _syncAnonUI();
+  });
+ 
+  const isTouchDevice = matchMedia('(pointer:coarse)').matches || ('ontouchstart' in _w);
+  let mobileMode = isTouchDevice;
+  let isPlaying = false, isShatteredLocal = false, ragdollEnabled = true, showGhost = true, showFingerGun = true, lookSensitivity = 1, invertY = false, thirdPerson = false;
+ 
+  // MINECRAFT SKİN SİSTEMİ & CANVAS OLUŞTURUCU
+  let mySkin = 'steve';
+  let customSkinCanvas = null;
+  let customSkinDataUrl = null;
+ 
+  let localArmSwing = 0;
+  function triggerArmSwing() {
+    localArmSwing = 1.0;
+  }
+ 
+  // Standart Minecraft 64x64 Dokularını Oluşturan Piksel Jeneratörü
+  function generateMinecraftSkinCanvas(type, customImg = null) {
+    const cvs = _d.createElement('canvas');
+    cvs.width = 64; cvs.height = 64;
+    const ctx = cvs.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+ 
+    if (customImg && customImg.complete && customImg.naturalWidth > 0) {
+      ctx.drawImage(customImg, 0, 0, 64, customImg.height === 32 ? 32 : 64);
+      if (customImg.height === 32) {
+        // 64x32 skin formatını 64x64'e genişlet (Sol kol ve bacağı kopyala)
+        ctx.drawImage(cvs, 0, 16, 16, 16, 16, 48, 16, 16);
+        ctx.drawImage(cvs, 40, 16, 16, 16, 32, 48, 16, 16);
+      }
+      return cvs;
+    }
+ 
+    // Renk paletleri
+    const palettes = {
+      steve: { skin: '#db9d75', hair: '#4a3219', eye: '#ffffff', pupil: '#2e43aa', shirt: '#00aaaa', pants: '#293594', shoes: '#545454' },
+      alex: { skin: '#e5a583', hair: '#d66224', eye: '#ffffff', pupil: '#1b7a37', shirt: '#5b8731', pants: '#4a3d31', shoes: '#504132' },
+      zombie: { skin: '#497536', hair: '#2a441f', eye: '#111111', pupil: '#111111', shirt: '#00aaaa', pants: '#293594', shoes: '#2a441f' },
+      creeper: { skin: '#51a136', hair: '#2f741b', eye: '#000000', pupil: '#000000', shirt: '#418b2b', pants: '#357523', shoes: '#215014' },
+      diamond: { skin: '#db9d75', hair: '#2cf5e2', eye: '#ffffff', pupil: '#008394', shirt: '#2cf5e2', pants: '#23c4b5', shoes: '#1aa396' },
+      skeleton: { skin: '#bcbcbc', hair: '#9c9c9c', eye: '#222222', pupil: '#111111', shirt: '#d4d4d4', pants: '#bcbcbc', shoes: '#888888' }
+    };
+    const pal = palettes[type] || palettes.steve;
+ 
+    // Arka planı ten rengiyle doldur
+    ctx.fillStyle = pal.skin;
+    ctx.fillRect(0, 0, 64, 64);
+ 
+    // Kafa Dokusu (0,0 - 32,16)
+    ctx.fillStyle = pal.hair;
+    ctx.fillRect(8, 0, 8, 8); // Kafa Üstü Saç
+    ctx.fillRect(0, 8, 32, 4); // Saç Bandı
+    ctx.fillStyle = pal.skin;
+    ctx.fillRect(8, 10, 8, 6); // Yüz
+    // Gözler
+    ctx.fillStyle = pal.eye;
+    ctx.fillRect(9, 12, 2, 1); ctx.fillRect(13, 12, 2, 1);
+    ctx.fillStyle = pal.pupil;
+    ctx.fillRect(10, 12, 1, 1); ctx.fillRect(13, 12, 1, 1);
+    // Burun / Ağız
+    ctx.fillStyle = '#8f4f34';
+    ctx.fillRect(11, 14, 2, 1);
+ 
+    // Gövde Dokusu (16,16 - 40,32)
+    ctx.fillStyle = pal.shirt;
+    ctx.fillRect(16, 16, 24, 16);
+    // Boyun yaka detayı
+    ctx.fillStyle = pal.skin;
+    ctx.fillRect(22, 20, 4, 3);
+ 
+    // Kollar (40,16 - 56,32 ve 32,48 - 48,64)
+    ctx.fillStyle = pal.shirt;
+    ctx.fillRect(40, 16, 16, 6);
+    ctx.fillRect(32, 48, 16, 6);
+    ctx.fillStyle = pal.skin;
+    ctx.fillRect(40, 22, 16, 10);
+    ctx.fillRect(32, 54, 16, 10);
+ 
+    // Bacaklar (0,16 - 16,32 ve 16,48 - 32,64)
+    ctx.fillStyle = pal.pants;
+    ctx.fillRect(0, 16, 16, 12);
+    ctx.fillRect(16, 48, 16, 12);
+    ctx.fillStyle = pal.shoes;
+    ctx.fillRect(0, 28, 16, 4);
+    ctx.fillRect(16, 60, 16, 4);
+ 
+    return cvs;
+  }
+ 
+  // Three.js BoxGeometry için İleriye (-Z) Bakan Düzeltilmiş Minecraft UV Eşleyicisi
+  function applyMinecraftBoxUV(geometry, u, v, w, h, d, texW = 64, texH = 64) {
+    const uvAttr = geometry.attributes.uv;
+    const uvArray = uvAttr.array;
+ 
+    const setFaceUV = (faceIdx, x0, y0, fw, fh) => {
+      const u0 = x0 / texW, v0 = 1 - (y0 + fh) / texH;
+      const u1 = (x0 + fw) / texW, v1 = 1 - y0 / texH;
+      const offset = faceIdx * 8;
+      uvArray[offset + 0] = u0; uvArray[offset + 1] = v1;
+      uvArray[offset + 2] = u1; uvArray[offset + 3] = v1;
+      uvArray[offset + 4] = u0; uvArray[offset + 5] = v0;
+      uvArray[offset + 6] = u1; uvArray[offset + 7] = v0;
+    };
+ 
+    setFaceUV(0, u, v + d, d, h);                  // +X (Karakterin Sağı)
+    setFaceUV(1, u + d + w, v + d, d, h);          // -X (Karakterin Solu)
+    setFaceUV(2, u + d, v, w, d);                  // +Y (Üst)
+    setFaceUV(3, u + d + w, v, w, d);              // -Y (Alt)
+    setFaceUV(4, u + d + w + d, v + d, w, h);      // +Z (Sırt / Arka)
+    setFaceUV(5, u + d, v + d, w, h);              // -Z (ÖN YÜZ / Yüz & Göğüs)
+ 
+    uvAttr.needsUpdate = true;
+  }
+ 
+  function createMiniPropVisual(propKey) {
+    const t = (typeof PROP_TYPES !== 'undefined' && PROP_TYPES[propKey]) ? PROP_TYPES[propKey] : { s: 'box', h: [1, 1, 1], fixedColor: '#facc15' };
+    const col = t.fixedColor || (t.bounce ? '#a855f7' : '#facc15');
+    const geo = (typeof propGeo === 'function') ? propGeo(propKey) : new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.scale.set(0.22, 0.22, 0.22);
+    mesh.castShadow = true;
+    return mesh;
+  }
+ 
+  function createHandWeaponVisual(weaponId) {
+    const g = new THREE.Group();
+    if ((weaponId === 'portal' || weaponId === 0) && typeof buildWeaponVisualModel === 'function') {
+      const w = buildWeaponVisualModel('portal');
+      w.scale.set(0.65, 0.65, 0.65);
+      w.position.set(0, -0.04, -0.14);
+      g.add(w);
+    } else if ((weaponId === 'gravity' || weaponId === 1) && typeof buildWeaponVisualModel === 'function') {
+      const w = buildWeaponVisualModel('gravity');
+      w.scale.set(0.65, 0.65, 0.65);
+      w.position.set(0, -0.04, -0.14);
+      g.add(w);
+    } else {
+      const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.28), new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }));
+      barrel.position.set(0, 0, -0.14);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.07), new THREE.MeshStandardMaterial({ color: 0x475569 }));
+      handle.position.set(0, -0.09, 0);
+      g.add(barrel, handle);
+    }
+    return g;
+  }
+ 
+  // Minecraft Bloklu Karakter Modeli Oluşturucu (Steve / Alex / Custom)
+  function buildMinecraftHumanoid(skinCanvas) {
+    const root = new THREE.Group();
+    const texture = new THREE.CanvasTexture(skinCanvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestMipmapNearestFilter;
+    const skinMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85, metalness: 0.05, alphaTest: 0.05 });
+ 
+    // Kafa: 0.52 x 0.52 x 0.52 (8x8x8 orantılı kutu)
+    const headGeo = new THREE.BoxGeometry(0.52, 0.52, 0.52);
+    applyMinecraftBoxUV(headGeo, 0, 0, 8, 8, 8);
+    const headMesh = new THREE.Mesh(headGeo, skinMat);
+    headMesh.castShadow = true;
+    const headGroup = new THREE.Group();
+    headGroup.position.y = 1.95;
+    headGroup.add(headMesh);
+ 
+    // Kask / Şapka 2. Katman (Minecraft Hat Layer: 32,0)
+    const hatGeo = new THREE.BoxGeometry(0.56, 0.56, 0.56);
+    applyMinecraftBoxUV(hatGeo, 32, 0, 8, 8, 8);
+    const hatMat = new THREE.MeshStandardMaterial({ map: texture, transparent: true, alphaTest: 0.35, roughness: 0.85 });
+    const hatMesh = new THREE.Mesh(hatGeo, hatMat);
+    headGroup.add(hatMesh);
+    root.add(headGroup);
+ 
+    // Gövde (Torso): 0.52 x 0.78 x 0.26 (8x12x4 orantılı kutu)
+    const torsoGeo = new THREE.BoxGeometry(0.52, 0.78, 0.26);
+    applyMinecraftBoxUV(torsoGeo, 16, 16, 8, 12, 4);
+    const torsoMesh = new THREE.Mesh(torsoGeo, skinMat);
+    torsoMesh.castShadow = true;
+    torsoMesh.position.y = 1.30;
+    root.add(torsoMesh);
+ 
+    // Sol Kol (Off-Hand)
+    const armL = new THREE.Group();
+    armL.position.set(-0.39, 1.62, 0);
+    const armLGeo = new THREE.BoxGeometry(0.24, 0.78, 0.24);
+    applyMinecraftBoxUV(armLGeo, 32, 48, 4, 12, 4);
+    const armLMesh = new THREE.Mesh(armLGeo, skinMat);
+    armLMesh.castShadow = true;
+    armLMesh.position.y = -0.34;
+    armL.add(armLMesh);
+ 
+    const offHandSlot = new THREE.Group();
+    offHandSlot.position.set(0, -0.68, -0.12);
+    armL.add(offHandSlot);
+    root.add(armL);
+ 
+    // Sağ Kol (Main Hand)
+    const armR = new THREE.Group();
+    armR.position.set(0.39, 1.62, 0);
+    const armRGeo = new THREE.BoxGeometry(0.24, 0.78, 0.24);
+    applyMinecraftBoxUV(armRGeo, 40, 16, 4, 12, 4);
+    const armRMesh = new THREE.Mesh(armRGeo, skinMat);
+    armRMesh.castShadow = true;
+    armRMesh.position.y = -0.34;
+    armR.add(armRMesh);
+ 
+    const weaponSlot = new THREE.Group();
+    weaponSlot.position.set(0, -0.68, -0.12);
+    armR.add(weaponSlot);
+    root.add(armR);
+ 
+    // Sol Bacak (Left Leg)
+    const legL = new THREE.Group();
+    legL.position.set(-0.14, 0.91, 0);
+    const legLGeo = new THREE.BoxGeometry(0.25, 0.78, 0.25);
+    applyMinecraftBoxUV(legLGeo, 16, 48, 4, 12, 4);
+    const legLMesh = new THREE.Mesh(legLGeo, skinMat);
+    legLMesh.castShadow = true;
+    legLMesh.position.y = -0.38;
+    legL.add(legLMesh);
+    root.add(legL);
+ 
+    // Sağ Bacak (Right Leg)
+    const legR = new THREE.Group();
+    legR.position.set(0.14, 0.91, 0);
+    const legRGeo = new THREE.BoxGeometry(0.25, 0.78, 0.25);
+    applyMinecraftBoxUV(legRGeo, 0, 16, 4, 12, 4);
+    const legRMesh = new THREE.Mesh(legRGeo, skinMat);
+    legRMesh.castShadow = true;
+    legRMesh.position.y = -0.38;
+    legR.add(legRMesh);
+    root.add(legR);
+ 
+    return {
+      root, skinMat, headGroup, armL, armR, legL, legR,
+      weaponSlot, offHandSlot,
+      currentWeaponId: null, currentPropKey: null,
+      walkPhase: 0, texture, skinCanvas
+    };
+  }
+ 
+  function updateRigHeldItems(rig, weaponModeId, offHandPropKey) {
+    if (!rig) return;
+    if (rig.currentWeaponId !== weaponModeId && rig.weaponSlot) {
+      while (rig.weaponSlot.children.length > 0) rig.weaponSlot.remove(rig.weaponSlot.children[0]);
+      if (weaponModeId !== null && weaponModeId !== undefined) {
+        rig.weaponSlot.add(createHandWeaponVisual(weaponModeId));
+      }
+      rig.currentWeaponId = weaponModeId;
+    }
+    if (rig.currentPropKey !== offHandPropKey && rig.offHandSlot) {
+      while (rig.offHandSlot.children.length > 0) rig.offHandSlot.remove(rig.offHandSlot.children[0]);
+      if (offHandPropKey) {
+        rig.offHandSlot.add(createMiniPropVisual(offHandPropKey));
+      }
+      rig.currentPropKey = offHandPropKey;
+    }
+  }
+ 
+  function getActiveLocalSkinCanvas() {
+    if (customSkinCanvas) return customSkinCanvas;
+    return generateMinecraftSkinCanvas(mySkin || 'steve');
+  }
+ 
+  function updateSkinPreviewCanvas(canvasId, skinCanvas) {
+    const c = $(canvasId);
+    if (!c || !skinCanvas) return;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(skinCanvas, 8, 8, 8, 8, 0, 0, c.width, c.height);
+  }
+ 
+  function loadCustomSkinFromFile(file) {
+    if (!file || !file.type.includes('png')) {
+      alert('Lütfen geçerli bir Minecraft PNG skin dosyası seçin!');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        customSkinCanvas = generateMinecraftSkinCanvas('custom', img);
+        customSkinDataUrl = customSkinCanvas.toDataURL('image/png');
+        mySkin = customSkinDataUrl;
+        $('skinSelect').value = 'custom';
+        $('startSkinSelect').value = 'custom';
+        updateSkinPreviewCanvas('settingsSkinCanvas', customSkinCanvas);
+        updateSkinPreviewCanvas('startSkinCanvas', customSkinCanvas);
+        rebuildLocalAvatar();
+        syncPlayerState(true);
+        appendChatMessage('SKİN', '#34d399', '✨ Yeni Minecraft skini başarıyla kuşanıldı!');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+ 
+  $('skinFileInput').addEventListener('change', (e) => { if (e.target.files[0]) loadCustomSkinFromFile(e.target.files[0]); });
+  $('startSkinFileInput').addEventListener('change', (e) => { if (e.target.files[0]) loadCustomSkinFromFile(e.target.files[0]); });
+ 
+  function setSkinType(type) {
+    if (type === 'custom') {
+      if (customSkinCanvas) {
+        mySkin = customSkinDataUrl;
+      } else {
+        $('skinFileInput').click();
+        return;
+      }
+    } else {
+      mySkin = type;
+      customSkinCanvas = null;
+    }
+    $('skinSelect').value = type;
+    $('startSkinSelect').value = type;
+    const cvs = getActiveLocalSkinCanvas();
+    updateSkinPreviewCanvas('settingsSkinCanvas', cvs);
+    updateSkinPreviewCanvas('startSkinCanvas', cvs);
+    rebuildLocalAvatar();
+    syncPlayerState(true);
+  }
+ 
+  $('skinSelect').addEventListener('change', (e) => setSkinType(e.target.value));
+  $('startSkinSelect').addEventListener('change', (e) => setSkinType(e.target.value));
+ 
+  // İlk varsayılan Steve önizlemesi
+  const defaultSteveCanvas = generateMinecraftSkinCanvas('steve');
+  updateSkinPreviewCanvas('settingsSkinCanvas', defaultSteveCanvas);
+  updateSkinPreviewCanvas('startSkinCanvas', defaultSteveCanvas);
+ 
+  // HER PORTAL İÇİN AYRI X VE Y BÜYÜKLÜKLERİ
+  let blueScaleX = 1.5, blueScaleY = 1.5;
+  let orangeScaleX = 1.5, orangeScaleY = 1.5;
+ 
+  // OYUNCU BÜYÜME / KÜÇÜLME ÖLÇEĞİ
+  const BASE_PLAYER_RADIUS = 0.8;
+  let playerScale = 1.0;
+  let playerRadius = BASE_PLAYER_RADIUS;
+ 
+  const isHex = (s) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+  const randHex = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+  let myColor = randHex();
+  const startScreen = $('startScreen'), serverIpInput = $('serverIpInput'), authStatus = $('authStatus');
+  const crosshair = $('crosshair'), chatInput = $('chatInput'), chatMessages = $('chatMessages');
+  const settingsModal = $('settingsModal'), keybindsModal = $('keybindsModal'), adminModal = $('adminModal'), portalConfigModal = $('portalConfigModal'), buildMenu = $('buildMenu'), vehiclePrompt = $('vehiclePrompt');
+ 
+  function setMobileMode(enabled) {
+    mobileMode = Boolean(enabled);
+    _d.body.classList.toggle('mobile-mode', mobileMode);
+    $('mobileModeBtn').textContent = `📱 Mobil: ${mobileMode ? 'AÇIK' : 'KAPALI'}`;
+    $('mobileModeBtn').style.borderColor = mobileMode ? '#22c55e' : '#10b981';
+    $('mobileModeToggle').checked = mobileMode;
+    $('startMobileBtn').textContent = mobileMode ? '📱 Mobil Mod: AÇIK' : '📱 Mobil Mod: KAPALI';
+    if (mobileMode && _d.pointerLockElement) _d.exitPointerLock();
+  }
+  setMobileMode(isTouchDevice);
+ 
+  $('mobileModeBtn').addEventListener('click', (e) => { e.currentTarget.blur(); setMobileMode(!mobileMode); });
+  $('startMobileBtn').addEventListener('click', () => setMobileMode(!mobileMode));
+  $('mobileModeToggle').addEventListener('change', (e) => setMobileMode(e.target.checked));
+ 
+  function returnToMainMenu() {
+    isPlaying = false;
+    if (_d.pointerLockElement) _d.exitPointerLock();
+    settingsModal.style.display = 'none';
+    keybindsModal.style.display = 'none';
+    adminModal.style.display = 'none';
+    portalConfigModal.style.display = 'none';
+    buildMenu.style.display = 'none';
+    crosshair.classList.add('hidden');
+    $('statusHud').classList.add('hidden');
+    vehiclePrompt.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+  }
+  $('mainMenuBtn').addEventListener('click', (e) => { e.currentTarget.blur(); returnToMainMenu(); });
+  $('returnMainMenuBtn').addEventListener('click', returnToMainMenu);
+ 
+  function updateStatsUI(hpVal, armVal, ammoVal) {
+    if (hpVal !== undefined) _0xV.setHp(hpVal);
+    if (armVal !== undefined) _0xV.setArm(armVal);
+    if (ammoVal !== undefined) _0xV.setAmmo(ammoVal);
+    const hp = _0xV.getHp(), arm = _0xV.getArm(), am = _0xV.getAmmo();
+    $('hpBarFill').style.width = hp + '%';
+    $('hpText').textContent = (_0xV.getGod() ? '🛡️ ÖLÜMSÜZ ' : '❤️ ') + hp + ' HP';
+    $('armorBarFill').style.width = arm + '%';
+    $('armorText').textContent = '🛡️ ' + arm + ' Zırh';
+    $('ammoBadge').textContent = '🔋 ' + am + ' Ammo';
+    $('scaleBadge').textContent = `📐 Boyut: ${playerScale.toFixed(2)}x`;
+    $('hudPlayerScale').textContent = `${playerScale.toFixed(2)}x`;
+  }
+ 
+  const RAG_DEFS = {
+    torso: [[0.55, 0.8, 0.3], [0, 1.3, 0], 5], head: [[0.52, 0.52, 0.52], [0, 1.95, 0], 2],
+    armL: [[0.25, 0.8, 0.25], [-0.4, 1.3, 0], 1.2], armR: [[0.25, 0.8, 0.25], [0.4, 1.3, 0], 1.2],
+    legL: [[0.26, 0.8, 0.26], [-0.15, 0.5, 0], 1.5], legR: [[0.26, 0.8, 0.26], [0.15, 0.5, 0], 1.5]
+  };
+  let localRagdoll = null, ragdollStart = 0, ragdollTimer = null;
+  const r2 = (v, k) => Math.round(v * k) / k;
+  const ragPose = (r) => r.parts.map(({ body: b }) => [r2(b.position.x, 100), r2(b.position.y, 100), r2(b.position.z, 100), r2(b.quaternion.x, 1000), r2(b.quaternion.y, 1000), r2(b.quaternion.z, 1000), r2(b.quaternion.w, 1000)]);
+ 
+  const DEFAULT_KEYS = {
+    forward: 'w', backward: 's', left: 'a', right: 'd',
+    jump: 'space', interactCar: 'e', ragdoll: 'r', marble: 'm',
+    buildMenu: 'b', quickSpawn: 'q', randomSpawn: 'g', fingerMode: 'v',
+    camView: 'c', adminMenu: 'p', rotateObj: 't', deleteObj: 'x',
+    fullscreen: 'f', keybinds: 'k'
+  };
+  const KEY_LABELS = {
+    forward: 'İleri / Gaz', backward: 'Geri / Fren', left: 'Sola Dönüş', right: 'Sağa Dönüş',
+    jump: 'Zıpla / El Freni', interactCar: 'Kostüm / Bin / İn (E)', ragdoll: 'Ragdoll (R)',
+    camView: '1./3. Şahıs Kamera', adminMenu: '👑 Admin Menüsü',
+    buildMenu: 'Obje Menüsü', quickSpawn: 'Seçili Objeyi Koy / Turuncu Portal', randomSpawn: '🎲 Rastgele Eşya At',
+    fingerMode: '🌀 Silah / Portal Modu', rotateObj: 'Objeyi Döndür', deleteObj: 'Baktığın Objeyi Sil',
+    marble: 'Marble Modu', fullscreen: 'Tam Ekran', keybinds: 'Tuş Atamaları'
+  };
+  let keybinds = Object.assign({}, DEFAULT_KEYS);
+  try { Object.assign(keybinds, JSON.parse(localStorage.getItem('sandbox_keybinds') || '{}')); } catch (e) {}
+  function saveKeybinds() { try { localStorage.setItem('sandbox_keybinds', JSON.stringify(keybinds)); } catch (e) {} }
+  let listeningKeyAction = null;
+  function renderKeybindsModal() {
+    const list = $('keybindsList'); list.innerHTML = '';
+    for (const act in KEY_LABELS) {
+      const row = _d.createElement('div'); row.className = 'kb-row';
+      const lbl = _d.createElement('span'); lbl.textContent = KEY_LABELS[act];
+      const btn = _d.createElement('button');
+      btn.type = 'button';
+      btn.className = 'kb-btn' + (listeningKeyAction === act ? ' listening' : '');
+      btn.textContent = listeningKeyAction === act ? 'Tuşa basın...' : keybinds[act].toUpperCase();
+      btn.onclick = () => { listeningKeyAction = act; renderKeybindsModal(); };
+      row.appendChild(lbl); row.appendChild(btn); list.appendChild(row);
+    }
+  }
+  function toggleKeybindsModal() {
+    listeningKeyAction = null;
+    const open = keybindsModal.style.display !== 'block';
+    keybindsModal.style.display = open ? 'block' : 'none';
+    if (open) { settingsModal.style.display = 'none'; renderKeybindsModal(); if (_d.pointerLockElement) _d.exitPointerLock(); }
+  }
+  $('keybindsBtn').addEventListener('click', toggleKeybindsModal);
+  $('openKeybindsFromSettings').addEventListener('click', toggleKeybindsModal);
+  $('closeKeybindsBtn').addEventListener('click', () => { listeningKeyAction = null; keybindsModal.style.display = 'none'; });
+  $('resetKeybindsBtn').addEventListener('click', () => { keybinds = Object.assign({}, DEFAULT_KEYS); saveKeybinds(); renderKeybindsModal(); });
+ 
+  function toggleFullscreen() {
+    const d = _d.documentElement, fs = _d.fullscreenElement || _d.webkitFullscreenElement;
+    if (!fs) (d.requestFullscreen || d.webkitRequestFullscreen || (() => {})).call(d);
+    else (_d.exitFullscreen || _d.webkitExitFullscreen || (() => {})).call(_d);
+  }
+  ['fullscreenBtn', 'startFullscreenBtn'].forEach((i) => $(i).addEventListener('click', toggleFullscreen));
+ 
+  // ================= FİZİK DÜNYASI =================
+  const world = new CANNON.World();
+  world.gravity.set(0, -25, 0);
+  world.broadphase = new CANNON.SAPBroadphase(world);
+  world.solver.iterations = 15;
+  const pm = new CANNON.Material('std');
+  const playerMat = new CANNON.Material('playerMat');
+  const bounceMat = new CANNON.Material('bounce');
+  const pcm = new CANNON.ContactMaterial(pm, pm, { friction: 0.35, restitution: 0.05, contactEquationStiffness: 1e8, contactEquationRelaxation: 3 });
+  const playerContactMat = new CANNON.ContactMaterial(playerMat, pm, { friction: 0.0, restitution: 0.0, contactEquationStiffness: 1e8, contactEquationRelaxation: 3 });
+  const bounceCm = new CANNON.ContactMaterial(pm, bounceMat, { friction: 0.1, restitution: 1.35, contactEquationStiffness: 1e8, contactEquationRelaxation: 3 });
+  const playerBounceCm = new CANNON.ContactMaterial(playerMat, bounceMat, { friction: 0.0, restitution: 1.35, contactEquationStiffness: 1e8, contactEquationRelaxation: 3 });
+  world.addContactMaterial(pcm);
+  world.addContactMaterial(playerContactMat);
+  world.addContactMaterial(bounceCm);
+  world.addContactMaterial(playerBounceCm);
+  world.defaultContactMaterial = pcm;
+  const syncBodyAABB = (b) => { b.aabbNeedsUpdate = true; b.computeAABB(); };
+ 
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x050014);
+  scene.fog = new THREE.FogExp2(0x050014, 0.0045);
+  const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 600);
+  const playerObj = new THREE.Object3D(), yawObj = new THREE.Object3D(), pitchObj = new THREE.Object3D();
+  scene.add(playerObj); playerObj.add(yawObj); yawObj.add(pitchObj); pitchObj.add(camera);
+  pitchObj.position.y = 1.25;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, isTouchDevice ? 1.25 : 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.localClippingEnabled = true;
+  _d.body.insertBefore(renderer.domElement, _d.body.firstChild);
+  scene.add(new THREE.AmbientLight(0x505575, 0.75));
+  const moonLight = new THREE.DirectionalLight(0x66bbff, 0.9);
+  moonLight.position.set(50, 100, -50);
+  moonLight.castShadow = true;
+  Object.assign(moonLight.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120 });
+  moonLight.shadow.mapSize.set(isTouchDevice ? 1024 : 2048, isTouchDevice ? 1024 : 2048);
+  if (isTouchDevice) { renderer.shadowMap.enabled = false; moonLight.castShadow = false; $('shadowsToggle').checked = false; }
+  scene.add(moonLight); scene.add(moonLight.target);
+ 
+  const mapPointLights = [];
+  [[0, 14, 0, 0x00ffff], [60, 24, 10, 0xff00ff], [90, 50, 0, 0x00ffaa], [-90, 12, -60, 0x8b5cf6], [160, 22, 0, 0xf97316]].forEach(([x, y, z, c]) => {
+    const l = new THREE.PointLight(c, 1.2, 60); l.position.set(x, y, z); scene.add(l);
+    mapPointLights.push(l);
+  });
+  const flashLight = new THREE.PointLight(0xffff00, 0, 10);
+  flashLight.position.set(0, 0, -1); pitchObj.add(flashLight);
+ 
+  // Minecraft Humanoid Rig Yürüme & Vuruş (Swing) Animasyonu
+  // Not: rotation.x POZİTİF = uzuv ÖNE (-Z) gider. Sağ bacak/kol ters faz ile yürür.
+  function animateMinecraftRig(rig, speed, dt, swingVal = 0, pitch = 0) {
+    if (speed > 0.3) rig.walkPhase += dt * Math.min(speed * 0.9, 12);
+    else rig.walkPhase = 0;
+    const s = speed > 0.3 ? Math.sin(rig.walkPhase) : 0;
+    rig.legL.rotation.x = s * 0.75;
+    rig.legR.rotation.x = -s * 0.75;
+ 
+    const holding = rig.currentWeaponId !== null && rig.currentWeaponId !== undefined;
+    // sol bacak öndeyken SAĞ kol önde (doğal yürüyüş); silah tutan kol hafif öne kalkık ve az sallanır
+    rig.armL.rotation.x = 0.05 - s * 0.35;
+    rig.armL.rotation.y = 0.05;
+    rig.armL.rotation.z = -0.04;
+    rig.armR.rotation.x = (holding ? 0.45 : 0.05) + s * (holding ? 0.14 : 0.35);
+    rig.armR.rotation.y = -0.06;
+    rig.armR.rotation.z = 0.04;
+ 
+    const activeSwing = (typeof swingVal === 'number') ? Math.max(0, Math.min(1, swingVal)) : 0;
+    if (activeSwing > 0.01) {
+      const punch = Math.sin(activeSwing * Math.PI);        // 0 -> 1 -> 0
+      rig.armR.rotation.x = (holding ? 0.45 : 0.05) + punch * 1.1; // ÖNE doğru kalkar (eskiden geriye gidiyordu)
+      rig.armR.rotation.y = -0.06 + punch * 0.12;
+    }
+    // elde tutulan silah / eşya kol dönse de yatay ve ileri baksın
+    if (rig.weaponSlot) rig.weaponSlot.rotation.x = -rig.armR.rotation.x;
+    if (rig.offHandSlot) rig.offHandSlot.rotation.x = -rig.armL.rotation.x;
+    // kafa yukarı/aşağı bakışı takip etsin
+    if (rig.headGroup) rig.headGroup.rotation.x = Math.max(-0.9, Math.min(0.9, pitch * 0.8));
+  }
+ 
+  function setGroupClippingPlane(groupObj, planeList) {
+    groupObj.traverse((child) => {
+      if (child.isMesh && child.material) child.material.clippingPlanes = planeList;
+    });
+  }
+ 
+  // Yerel Minecraft Karakter Modelleri
+  let localRig = buildMinecraftHumanoid(defaultSteveCanvas);
+  localRig.root.visible = false; scene.add(localRig.root);
+  let localPortalCloneRig = buildMinecraftHumanoid(defaultSteveCanvas);
+  localPortalCloneRig.root.visible = false; scene.add(localPortalCloneRig.root);
+ 
+  function rebuildLocalAvatar() {
+    scene.remove(localRig.root);
+    scene.remove(localPortalCloneRig.root);
+    const skinCvs = getActiveLocalSkinCanvas();
+    localRig = buildMinecraftHumanoid(skinCvs);
+    localPortalCloneRig = buildMinecraftHumanoid(skinCvs);
+    localRig.root.scale.set(playerScale, playerScale, playerScale);
+    localPortalCloneRig.root.scale.set(playerScale, playerScale, playerScale);
+    localRig.root.visible = thirdPerson && !drivingCar && !marbleMode && !isShatteredLocal;
+    localPortalCloneRig.root.visible = false;
+    scene.add(localRig.root);
+    scene.add(localPortalCloneRig.root);
+  }
+ 
+  function toggleCameraView() {
+    if (drivingCar || marbleMode) return;
+    thirdPerson = !thirdPerson; applyCameraRig();
+  }
+  $('camViewBtn').addEventListener('click', (e) => { e.currentTarget.blur(); toggleCameraView(); });
+ 
+  // Haritadaki Minecraft Statü Heykelleri
+  const mapStatues = [];
+  (function() {
+    const spots = [
+      { skin: 'diamond', x: 0,    y: 10,  z: 0,    title: '⚔️ Elmas Zırh (Neon Kule)' },
+      { skin: 'alex',    x: 0,    y: 40,  z: -228, title: '👩 Alex (Uçan Adalar Zirvesi)' },
+      { skin: 'zombie',  x: 20,   y: 31,  z: 110,  title: '🧟 Zombi (Gökdelen Çatısı)' },
+      { skin: 'creeper', x: -130, y: 3.5, z: 100,  title: '💥 Creeper (Yarış Pisti)' }
+    ];
+    spots.forEach((s) => {
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.3, 20), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+      pad.position.set(s.x, s.y + 0.15, s.z); scene.add(pad);
+      const rig = buildMinecraftHumanoid(generateMinecraftSkinCanvas(s.skin));
+      rig.root.position.set(s.x, s.y + 0.3, s.z); scene.add(rig.root);
+      mapStatues.push({ ...s, rig, pad });
+    });
+  })();
+ 
+  function findNearestStatue() {
+    let best = null, min = 4.2;
+    for (const st of mapStatues) {
+      const d = playerBody.position.distanceTo(st.rig.root.position);
+      if (d < min) { min = d; best = st; }
+    }
+    return best;
+  }
+ 
+  // SİLAH MODLARI
+  const FINGER_MODES = [
+    { id: 'portal',  name: '🌀 Portal Gun (Sol: Mavi | Sağ/Q: Turuncu)', btn: '🌀 Mod: Portal',  color: 0x38bdf8, force: 15, dmg: 0,  cost: 0, unlocked: true },
+    { id: 'gravity', name: '🧲 Gravity Gun (Sol: Tut/At | E: Bırak)',    btn: '🧲 Mod: Gravity', color: 0xf97316, force: 36, dmg: 10, cost: 0, unlocked: true },
+    { id: 'pew',     name: '👉 Klasik Pew (-25 HP)',                     btn: '👉 Mod: Pew',     color: 0x00ffff, force: 18, dmg: 25, cost: 1, unlocked: true },
+    { id: 'force',   name: '⚡ Süper İtme (-50 HP)',                     btn: '⚡ Mod: Süper',   color: 0xd946ef, force: 42, dmg: 50, cost: 3, unlocked: true },
+    { id: 'spawn',   name: '🎲 Eşya Atar',                               btn: '🎲 Mod: Eşya',    color: 0xfacc15, force: 16, dmg: 15, cost: 2, unlocked: true }
+  ];
+  let fingerModeIdx = 0, fingerRecoil = 0, walkBobTimer = 0;
+  let grabbedProp = null, grabDistance = 6.5;
+ 
+  function buildWeaponVisualModel(type) {
+    const g = new THREE.Group();
+    if (type === 'gravity') {
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.62, 12), new THREE.MeshStandardMaterial({ color: 0xea580c, metalness: 0.7, roughness: 0.25 }));
+      barrel.rotation.x = Math.PI / 2; g.add(barrel);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffedd5 }));
+      core.position.z = -0.18; g.add(core);
+      for (let i = 0; i < 3; i++) {
+        const a = (i * Math.PI * 2) / 3;
+        const claw = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.28), new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 }));
+        claw.position.set(Math.cos(a) * 0.14, Math.sin(a) * 0.14, -0.34);
+        g.add(claw);
+      }
+    } else if (type === 'portal') {
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.58, 16), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.15, metalness: 0.3 }));
+      shell.rotation.x = Math.PI / 2; g.add(shell);
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.3, 12), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+      tube.rotation.x = Math.PI / 2; tube.position.z = -0.16; g.add(tube);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 10, 20), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+      ring.position.z = -0.32; g.add(ring);
+    } else if (type === 'hp') {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.45, 0.65), new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 }));
+      const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff })); c1.position.y = 0.22;
+      const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.45), new THREE.MeshBasicMaterial({ color: 0xffffff })); c2.position.y = 0.22;
+      g.add(box, c1, c2);
+    } else if (type === 'armor') {
+      const shield = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.7, roughness: 0.2, emissive: 0x0284c7, emissiveIntensity: 0.4 }));
+      g.add(shield);
+    } else if (type === 'ammo') {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.45), new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.5, roughness: 0.3 }));
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.47), new THREE.MeshBasicMaterial({ color: 0x1e293b }));
+      g.add(crate, stripe);
+    }
+    return g;
+  }
+ 
+  const RANDOM_SPAWN_ZONES = [
+    [8, 2, -6], [-8, 2, -6], [0, 2, -18], [16, 0, 20], [-16, 0, 20],
+    [0, 3, -70], [18, 3, -75], [-18, 3, -75], [-90, 1, -60], [-82, 1, -55],
+    [-30, 0, 92], [20, 0, 92], [-5, 0, 95], [135, 0, -20], [155, 0, 10],
+    [-130, 3, 100], [-110, 3, 95], [-150, 3, 105], [35, 0, -35], [-35, 0, -35]
+  ];
+ 
+  const worldPickups = [];
+  function pickRandomZone() {
+    const z = RANDOM_SPAWN_ZONES[Math.floor(Math.random() * RANDOM_SPAWN_ZONES.length)];
+    return { x: z[0] + (Math.random() - 0.5) * 10, y: z[1], z: z[2] + (Math.random() - 0.5) * 10 };
+  }
+ 
+  function relocatePickupRandomly(pk) {
+    const pos = pickRandomZone();
+    pk.x = pos.x; pk.y = pos.y; pk.z = pos.z;
+    pk.base.position.set(pk.x, pk.y + 0.15, pk.z);
+    pk.model.position.set(pk.x, pk.y + 1.2, pk.z);
+    pk.active = true; pk.base.visible = true; pk.model.visible = true;
+  }
+ 
+  (function initRandomWorldPickups() {
+    const defs = [
+      { kind: 'gravity', title: '🧲 Gravity Gun', color: 0xf97316, scale: 1.9 },
+      { kind: 'portal',  title: '🌀 Portal Gun',  color: 0x38bdf8, scale: 1.9 },
+      { kind: 'hp',      title: '❤️ Can Çantası (+50 HP)', color: 0xef4444, scale: 1.3 },
+      { kind: 'hp',      title: '❤️ Can Çantası (+50 HP)', color: 0xef4444, scale: 1.3 },
+      { kind: 'armor',   title: '🛡️ Zırh Paketi (+50 Zırh)', color: 0x38bdf8, scale: 1.3 },
+      { kind: 'armor',   title: '🛡️ Zırh Paketi (+50 Zırh)', color: 0x38bdf8, scale: 1.3 },
+      { kind: 'ammo',    title: '🔋 Mermi Kutusu (+30 Ammo)', color: 0xfacc15, scale: 1.3 },
+      { kind: 'ammo',    title: '🔋 Mermi Kutusu (+30 Ammo)', color: 0xfacc15, scale: 1.3 }
+    ];
+    defs.forEach((d) => {
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.15, 0.28, 16), new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: d.color, emissiveIntensity: 0.55 }));
+      const model = buildWeaponVisualModel(d.kind);
+      model.scale.set(d.scale, d.scale, d.scale);
+      scene.add(base, model);
+      const pk = { ...d, base, model, x: 0, y: 0, z: 0, active: true };
+      relocatePickupRandomly(pk);
+      worldPickups.push(pk);
+    });
+  })();
+ 
+  function collectPickupItem(pk) {
+    if (!pk || !pk.active) return;
+    if (pk.kind === 'gravity' || pk.kind === 'portal') {
+      selectWeaponById(pk.kind);
+      updateStatsUI(undefined, undefined, _0xV.getAmmo() + 25);
+      appendChatMessage('LOOT', '#facc15', `${pk.title} alındı!`);
+    } else if (pk.kind === 'hp') {
+      updateStatsUI(_0xV.getHp() + 50, undefined, undefined);
+      if (isConnected) sendPacket({ type: 'healSelf', amount: 50 });
+      appendChatMessage('LOOT', '#22c55e', '❤️ Can Çantası alındı! (+50 HP)');
+    } else if (pk.kind === 'armor') {
+      updateStatsUI(undefined, _0xV.getArm() + 50, undefined);
+      if (isConnected) sendPacket({ type: 'armorSelf', amount: 50 });
+      appendChatMessage('LOOT', '#38bdf8', '🛡️ Zırh Paketi alındı! (+50 Zırh)');
+    } else if (pk.kind === 'ammo') {
+      updateStatsUI(undefined, undefined, _0xV.getAmmo() + 30);
+      appendChatMessage('LOOT', '#fde047', '🔋 Mermi Kutusu alındı! (+30 Ammo)');
+    }
+    pk.active = false; pk.base.visible = false; pk.model.visible = false;
+    setTimeout(() => relocatePickupRandomly(pk), 9000);
+  }
+ 
+  const fingerGunGroup = new THREE.Group();
+  const handSubGroup = new THREE.Group();
+  const gravityGunSubModel = buildWeaponVisualModel('gravity');
+  const portalGunSubModel = buildWeaponVisualModel('portal');
+  handSubGroup.visible = false;
+  gravityGunSubModel.visible = false;
+  portalGunSubModel.visible = true;
+  fingerGunGroup.add(handSubGroup, gravityGunSubModel, portalGunSubModel);
+ 
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xdb9d75, roughness: 0.85 });
+  const cuffMat = new THREE.MeshStandardMaterial({ color: 0x00aaaa, roughness: 0.85 });
+  const tipGlowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+  let thumbPivot = null;
+  const fingerTipLocalPos = new THREE.Vector3(0, 0.04, -0.34);
+ 
+  (function() {
+    const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.22), cuffMat); cuff.position.set(0, -0.02, 0.14); handSubGroup.add(cuff);
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.2), skinMat); handSubGroup.add(palm);
+    const indexFinger = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.24), skinMat); indexFinger.position.set(-0.03, 0.04, -0.18); handSubGroup.add(indexFinger);
+    thumbPivot = new THREE.Object3D(); thumbPivot.position.set(-0.04, 0.06, -0.02);
+    const thumbMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05), skinMat); thumbMesh.position.set(0, 0.04, 0); thumbMesh.rotation.x = 0.25;
+    thumbPivot.add(thumbMesh); handSubGroup.add(thumbPivot);
+    const tipRing = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 8), tipGlowMat); tipRing.position.set(-0.03, 0.04, -0.31); handSubGroup.add(tipRing);
+    fingerGunGroup.position.set(0.32, -0.26, -0.48); fingerGunGroup.rotation.set(0.05, 0.07, 0);
+    camera.add(fingerGunGroup);
+  })();
+ 
+  function applyWeaponModeUI() {
+    const m = FINGER_MODES[fingerModeIdx];
+    tipGlowMat.color.setHex(m.color);
+    $('fingerModeBtn').textContent = `${m.btn} (${keybinds.fingerMode.toUpperCase()})`;
+    $('hudWeaponName').textContent = m.name;
+    handSubGroup.visible = (m.id !== 'gravity' && m.id !== 'portal');
+    gravityGunSubModel.visible = (m.id === 'gravity');
+    portalGunSubModel.visible = (m.id === 'portal');
+    if (m.id === 'portal') {
+      $('shootBtnMobile').innerHTML = '🔵<br>MAVİ';
+      $('altShootBtnMobile').innerHTML = '🟠<br>TURUNCU';
+    } else if (m.id === 'gravity') {
+      $('shootBtnMobile').innerHTML = '🧲<br>TUT/AT';
+      $('altShootBtnMobile').innerHTML = '✋<br>BIRAK';
+    } else {
+      $('shootBtnMobile').innerHTML = '👉<br>ATEŞ';
+      $('altShootBtnMobile').innerHTML = '➕<br>KOY';
+    }
+    if (m.id !== 'gravity' && grabbedProp) grabbedProp = null;
+  }
+ 
+  function selectWeaponById(id) {
+    const idx = FINGER_MODES.findIndex((m) => m.id === id);
+    if (idx !== -1) {
+      FINGER_MODES[idx].unlocked = true;
+      fingerModeIdx = idx;
+      applyWeaponModeUI();
+    }
+  }
+ 
+  function cycleFingerMode() {
+    let next = (fingerModeIdx + 1) % FINGER_MODES.length;
+    while (!FINGER_MODES[next].unlocked && next !== fingerModeIdx) {
+      next = (next + 1) % FINGER_MODES.length;
+    }
+    fingerModeIdx = next;
+    applyWeaponModeUI();
+  }
+  $('fingerModeBtn').addEventListener('click', (e) => { e.currentTarget.blur(); cycleFingerMode(); });
+ 
+  // HARİTA VE STATİK BLOKLAR
+  const intersectableObjects = [];
+  const staticMapEntries = [];
+ 
+  function createCheckerboard() {
+    const c = _d.createElement('canvas'); c.width = c.height = 512;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0a0a1a'; x.fillRect(0, 0, 512, 512); x.fillStyle = '#1a1a3a';
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(i * 64, j * 64, 64, 64);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(37, 37);
+    return t;
+  }
+ 
+  function addStaticBlock(x, y, z, w, h, d, color, neon = false, rot = [0, 0, 0]) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({
+      color, roughness: neon ? 0.2 : 0.7, emissive: neon ? color : 0, emissiveIntensity: neon ? 0.6 : 0
+    }));
+    mesh.position.set(x, y + h / 2, z); mesh.rotation.set(rot[0], rot[1], rot[2], 'XYZ');
+    mesh.castShadow = mesh.receiveShadow = true;
+    const wallIdx = staticMapEntries.length;
+    const isHorizontalPlatform = (h <= 2.2 && w >= 12 && d >= 12);
+    mesh.userData = { wallIdx, isFloor: isHorizontalPlatform };
+    scene.add(mesh); intersectableObjects.push(mesh);
+ 
+    const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: pm });
+    body.isFloor = isHorizontalPlatform;
+    body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
+    body.position.copy(mesh.position); body.quaternion.set(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+    syncBodyAABB(body); world.addBody(body);
+    staticMapEntries.push({ mesh, body, wallIdx, isFloor: isHorizontalPlatform });
+  }
+ 
+  (function() {
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: createCheckerboard(), roughness: 0.8 }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    floor.userData = { wallIdx: -1, isFloor: true };
+    scene.add(floor); intersectableObjects.push(floor);
+    const fb = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: pm });
+    fb.isFloor = true;
+    fb.addShape(new CANNON.Box(new CANNON.Vec3(300, 1, 300)));
+    fb.position.set(0, -1, 0); syncBodyAABB(fb); world.addBody(fb);
+ 
+    const B = [];
+    B.push([0, 0, 0, 20, 2, 20, 0x333333, false]);
+    B.push([0, 2, 0, 10, 8, 10, 0x00ffff, true]);
+    B.push([-9, 2, -6, 1.2, 8, 10, 0x334155, false]);
+    B.push([9, 2, -6, 1.2, 8, 10, 0x334155, false]);
+    let px = 20, py = 2, pz = 0;
+    const off = [-3, 4, -2, 5, -4, 3, -2, 1];
+    for (let i = 0; i < 8; i++) { B.push([px, py, pz, 4, 1, 4, 0xff00ff, true]); px += 6; py += 2.5; pz += off[i]; }
+    B.push([px + 10, 0, pz, 15, py + 10, 15, 0x222244, false]);
+    B.push([px + 10, py + 10, pz, 17, 2, 17, 0x00ffaa, true]);
+    for (let i = 0; i < 15; i++) B.push([-20 - i * 2, i * 0.5, 20, 2, 0.5, 10, 0xff8800, false]);
+    [-18, 0, 18].forEach((x) => B.push([x, 1.5, -40, 10, 1, 16, 0xffcc00, true, [0.3, 0, 0]]));
+    B.push([0, 0, -75, 60, 3, 24, 0x0f766e, false]);
+    B.push([0, 3, -84, 20, 1, 6, 0x14b8a6, true]);
+    const cx = -90, cz = -60;
+    B.push([cx, 0, cz, 20, 1, 20, 0x6d28d9, false]);
+    B.push([cx, 3.9, cz - 16.1, 28, 1, 14, 0x8b5cf6, false, [0.5, 0, 0]]);
+    B.push([cx, 3.9, cz + 16.1, 28, 1, 14, 0x8b5cf6, false, [-0.5, 0, 0]]);
+    B.push([cx + 16.1, 3.9, cz, 14, 1, 28, 0xa78bfa, false, [0, 0, 0.5]]);
+    B.push([cx - 16.1, 3.9, cz, 14, 1, 28, 0xa78bfa, false, [0, 0, -0.5]]);
+    B.push([cx, 1, cz, 3, 2, 3, 0xfacc15, true]);
+    for (let i = 0; i < 12; i++) B.push([Math.sin(i * 0.6) * 12, 2 + i * 3, -110 - i * 9, 6, 1, 6, 0xf472b6, true]);
+    B.push([0, 38, -228, 16, 2, 16, 0xfacc15, true]);
+    B.push([-30, 0, 110, 12, 30, 12, 0x1e293b, false]);
+    B.push([-5, 0, 110, 12, 30, 12, 0x1e293b, false]);
+    B.push([20, 0, 110, 16, 30, 16, 0x1e293b, false]);
+    B.push([-17.5, 29, 110, 13, 1, 4, 0x38bdf8, true]);
+    B.push([7, 29, 110, 12, 1, 4, 0x38bdf8, true]);
+    B.push([20, 30, 110, 16, 1, 16, 0x22d3ee, true]);
+    B.push([-30, 30, 110, 12, 1, 12, 0x22d3ee, true]);
+    for (let i = 0; i < 12; i++) B.push([-30, 0, 101.5 - 5 * (11 - i), 8, 2.5 * (i + 1), 5, 0x334155, false]);
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+      const h = 2 + ((i * 3 + j * 5) % 7) * 1.5;
+      B.push([130 + i * 14, 0, -35 + j * 14, 6, h, 6, h > 8 ? 0xf97316 : 0x475569, h > 8]);
+    }
+    const tx = -130, tz = 100;
+    B.push([tx, 0, tz - 45, 140, 3, 2, 0xef4444, true]);
+    B.push([tx, 0, tz + 45, 140, 3, 2, 0xef4444, true]);
+    B.push([tx - 70, 0, tz, 2, 3, 90, 0xef4444, true]);
+    B.push([tx + 70, 0, tz, 2, 3, 90, 0xef4444, true]);
+    B.push([tx, 0, tz, 90, 3, 40, 0x1f2937, false]);
+    B.push([tx, 3, tz, 10, 0.5, 10, 0xfacc15, true]);
+    B.push([0, 0, -300, 600, 20, 4, 0x111827, false]);
+    B.push([0, 0, 300, 600, 20, 4, 0x111827, false]);
+    B.push([-300, 0, 0, 4, 20, 600, 0x111827, false]);
+    B.push([300, 0, 0, 4, 20, 600, 0x111827, false]);
+ 
+    B.forEach((b) => addStaticBlock(b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]));
+  })();
+ 
+  function findClosestWallBody(pos, norm, wallIdx = -1, propId = null) {
+    if (wallIdx >= 0 && staticMapEntries[wallIdx] && !staticMapEntries[wallIdx].isFloor) return staticMapEntries[wallIdx].body;
+    if (propId && activeProps[propId]) return activeProps[propId].body;
+    const probeStart = pos.clone().addScaledVector(norm, 0.35);
+    const probeDir = norm.clone().negate();
+    const rc = new THREE.Raycaster(probeStart, probeDir, 0, 1.5);
+    const hit = rc.intersectObjects(intersectableObjects, false)[0];
+    if (hit && hit.object.userData) {
+      const wIdx = hit.object.userData.wallIdx;
+      if (wIdx !== undefined && wIdx >= 0 && staticMapEntries[wIdx] && !staticMapEntries[wIdx].isFloor) return staticMapEntries[wIdx].body;
+    }
+    return null;
+  }
+ 
+  // PORTAL SİSTEMİ (Ayrı X/Y & Boyut Orantısı)
+  let portalCooldown = 0;
+  let portalRes = isTouchDevice ? 384 : 768;
+  const playerPortals = {};
+ 
+  function getPortalEffectiveScale(p) {
+    return Math.sqrt((p.scaleX || 1.5) * (p.scaleY || 1.5));
+  }
+ 
+  function makePortalSystem(hexColor, isOrangeFlag, ownerId) {
+    const rt = new THREE.WebGLRenderTarget(portalRes, portalRes, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+    const cam = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 600);
+    const g = new THREE.Group();
+ 
+    const border = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.14, 16, 40), new THREE.MeshBasicMaterial({ color: hexColor }));
+    border.scale.set(0.92, 1.42, 1);
+    g.add(border);
+ 
+    const surfaceMat = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: rt.texture },
+        uResolution: { value: new THREE.Vector2(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()) },
+        uLinked: { value: 0 },
+        uColor: { value: new THREE.Color(hexColor) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 uResolution;
+        uniform int uLinked;
+        uniform vec3 uColor;
+        varying vec2 vUv;
+        void main() {
+          float borderFade = smoothstep(0.5, 0.42, distance(vUv, vec2(0.5)));
+          if (uLinked == 0) {
+            gl_FragColor = vec4(uColor * (0.4 + 0.5 * borderFade), 0.95);
+            return;
+          }
+          vec2 screenUV = clamp(gl_FragCoord.xy / uResolution, 0.001, 0.999);
+          vec4 texColor = texture2D(tDiffuse, screenUV);
+          vec3 finalCol = mix(uColor, texColor.rgb, borderFade);
+          gl_FragColor = vec4(finalCol, 1.0);
+        }
+      `,
+      side: THREE.DoubleSide
+    });
+ 
+    const inner = new THREE.Mesh(new THREE.CircleGeometry(1.41, 36), surfaceMat);
+    inner.scale.set(0.92, 1.42, 1);
+    g.add(inner);
+ 
+    const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(1.41, 1.41, 0.55, 32, 1, true), new THREE.MeshBasicMaterial({ color: hexColor, side: THREE.BackSide, transparent: true, opacity: 0.45 }));
+    tunnel.rotation.x = Math.PI / 2;
+    tunnel.scale.set(0.92, 1.42, 1);
+    tunnel.position.z = -0.22;
+    g.add(tunnel);
+ 
+    const canvas = _d.createElement('canvas'); canvas.width = 256; canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(28, 6, 200, 36);
+    ctx.font = 'bold 20px sans-serif'; ctx.fillStyle = isOrangeFlag ? '#fb923c' : '#38bdf8';
+    ctx.textAlign = 'center'; ctx.fillText(String(ownerId).slice(0, 14), 128, 31);
+    const labelTex = new THREE.CanvasTexture(canvas);
+    const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false }));
+    labelSprite.scale.set(1.8, 0.36, 1);
+    labelSprite.position.set(0, 2.28, 0.05);
+    g.add(labelSprite);
+ 
+    g.visible = false;
+    scene.add(g);
+    const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    return {
+      ownerId, isOrange: isOrangeFlag,
+      group: g, inner, surfaceMat, rt, cam, hexColor, clipPlane, labelTex,
+      active: false, scale: 1.5, scaleX: 1.5, scaleY: 1.5,
+      pos: new THREE.Vector3(), normal: new THREE.Vector3(0, 0, 1),
+      wallBody: null, wallIdx: -1
+    };
+  }
+ 
+  function getOrCreatePlayerPortalPair(ownerId) {
+    if (!playerPortals[ownerId]) {
+      playerPortals[ownerId] = {
+        blue: makePortalSystem(0x38bdf8, false, ownerId),
+        orange: makePortalSystem(0xf97316, true, ownerId)
+      };
+    }
+    return playerPortals[ownerId];
+  }
+ 
+  function removePlayerPortalPair(ownerId) {
+    const pair = playerPortals[ownerId];
+    if (!pair) return;
+    [pair.blue, pair.orange].forEach((p) => {
+      if (!p) return;
+      if (p.wallBody) p.wallBody.collisionResponse = true;
+      scene.remove(p.group);
+      p.rt.dispose();
+      p.surfaceMat.dispose();
+      if (p.labelTex) p.labelTex.dispose();
+    });
+    delete playerPortals[ownerId];
+  }
+ 
+  function applyPortalTransform(p, px, py, pz, nx, ny, nz, wallIdx = -1, propId = null, sx = null, sy = null, ux = null, uy = null, uz = null) {
+    if (p.wallBody) p.wallBody.collisionResponse = true;
+    const defX = p.isOrange ? orangeScaleX : blueScaleX;
+    const defY = p.isOrange ? orangeScaleY : blueScaleY;
+    p.scaleX = Math.max(0.4, Math.min(5.0, sx !== null && sx !== undefined ? sx : defX));
+    p.scaleY = Math.max(0.4, Math.min(5.0, sy !== null && sy !== undefined ? sy : defY));
+    p.scale  = getPortalEffectiveScale(p);
 
+    p.normal.set(nx, ny, nz).normalize();
+    p.pos.set(px, py, pz);
+    p.group.position.copy(p.pos);
+    p.group.scale.set(p.scaleX, p.scaleY, 1.0);
+
+    let upVec = new THREE.Vector3(0, 1, 0);
+    if (ux !== null && uy !== null && uz !== null && (ux !== 0 || uy !== 0 || uz !== 0)) {
+      upVec.set(ux, uy, uz).normalize();
+    } else if (Math.abs(p.normal.y) > 0.7) {
+      upVec.set(0, 0, -1);
+    }
+    p.upVec = upVec.clone();
+    p.group.up.copy(upVec);
+    p.group.lookAt(p.pos.clone().add(p.normal));
+    p.group.updateMatrixWorld();
+
+    p.clipPlane.setFromNormalAndCoplanarPoint(p.normal, p.pos.clone().addScaledVector(p.normal, -0.04));
+    p.wallBody = findClosestWallBody(p.pos, p.normal, wallIdx, propId);
+    p.wallIdx = wallIdx;
+    p.group.visible = true;
+    p.active = true;
+  }
+ 
+  function updatePortalDimensionUI() {
+    $('blueScaleXVal').textContent = blueScaleX.toFixed(1) + 'x';
+    $('blueScaleYVal').textContent = blueScaleY.toFixed(1) + 'x';
+    $('bluePortalDimLabel').textContent = `X: ${blueScaleX.toFixed(1)} | Y: ${blueScaleY.toFixed(1)}`;
+    $('blueScaleXSlider').value = blueScaleX;
+    $('blueScaleYSlider').value = blueScaleY;
+ 
+    $('orangeScaleXVal').textContent = orangeScaleX.toFixed(1) + 'x';
+    $('orangeScaleYVal').textContent = orangeScaleY.toFixed(1) + 'x';
+    $('orangePortalDimLabel').textContent = `X: ${orangeScaleX.toFixed(1)} | Y: ${orangeScaleY.toFixed(1)}`;
+    $('orangeScaleXSlider').value = orangeScaleX;
+    $('orangeScaleYSlider').value = orangeScaleY;
+ 
+    $('hudPortalScale').textContent = `🔵${blueScaleX.toFixed(1)}x${blueScaleY.toFixed(1)} | 🟠${orangeScaleX.toFixed(1)}x${orangeScaleY.toFixed(1)}`;
+  }
+ 
+  function syncMyPortalDimensions(broadcastChange = true) {
+    updatePortalDimensionUI();
+    const pair = getOrCreatePlayerPortalPair(_uid);
+    pair.blue.scaleX = blueScaleX; pair.blue.scaleY = blueScaleY;
+    pair.blue.scale = getPortalEffectiveScale(pair.blue);
+    pair.blue.group.scale.set(blueScaleX, blueScaleY, 1.0);
+    pair.blue.group.updateMatrixWorld();
+ 
+    pair.orange.scaleX = orangeScaleX; pair.orange.scaleY = orangeScaleY;
+    pair.orange.scale = getPortalEffectiveScale(pair.orange);
+    pair.orange.group.scale.set(orangeScaleX, orangeScaleY, 1.0);
+    pair.orange.group.updateMatrixWorld();
+ 
+    if (broadcastChange && isConnected) {
+      if (pair.blue.active) {
+        sendPacket({
+          type: 'placePortal', ownerId: _uid, isOrange: false,
+          x: pair.blue.pos.x, y: pair.blue.pos.y, z: pair.blue.pos.z,
+          nx: pair.blue.normal.x, ny: pair.blue.normal.y, nz: pair.blue.normal.z,
+          scale: pair.blue.scale, scaleX: blueScaleX, scaleY: blueScaleY, wallIdx: pair.blue.wallIdx
+        });
+      }
+      if (pair.orange.active) {
+        sendPacket({
+          type: 'placePortal', ownerId: _uid, isOrange: true,
+          x: pair.orange.pos.x, y: pair.orange.pos.y, z: pair.orange.pos.z,
+          nx: pair.orange.normal.x, ny: pair.orange.normal.y, nz: pair.orange.normal.z,
+          scale: pair.orange.scale, scaleX: orangeScaleX, scaleY: orangeScaleY, wallIdx: pair.orange.wallIdx
+        });
+      }
+    }
+  }
+ 
+  function togglePortalConfigModal() {
+    const open = portalConfigModal.style.display !== 'block';
+    portalConfigModal.style.display = open ? 'block' : 'none';
+    if (open) {
+      settingsModal.style.display = 'none';
+      updatePortalDimensionUI();
+      if (_d.pointerLockElement) _d.exitPointerLock();
+    }
+  }
+ 
+  $('portalSizeBtn').addEventListener('click', (e) => { e.currentTarget.blur(); togglePortalConfigModal(); });
+  $('openPortalCfgFromSettings').addEventListener('click', togglePortalConfigModal);
+  $('closePortalConfigBtn').addEventListener('click', () => (portalConfigModal.style.display = 'none'));
+  $('closePortalConfigTop').addEventListener('click', () => (portalConfigModal.style.display = 'none'));
+ 
+  $('blueScaleXSlider').addEventListener('input', (e) => { blueScaleX = parseFloat(e.target.value); syncMyPortalDimensions(true); });
+  $('blueScaleYSlider').addEventListener('input', (e) => { blueScaleY = parseFloat(e.target.value); syncMyPortalDimensions(true); });
+  $('orangeScaleXSlider').addEventListener('input', (e) => { orangeScaleX = parseFloat(e.target.value); syncMyPortalDimensions(true); });
+  $('orangeScaleYSlider').addEventListener('input', (e) => { orangeScaleY = parseFloat(e.target.value); syncMyPortalDimensions(true); });
+ 
+  $('presetGrowBtn').addEventListener('click', () => {
+    blueScaleX = 0.8; blueScaleY = 0.8;
+    orangeScaleX = 2.8; orangeScaleY = 2.8;
+    syncMyPortalDimensions(true);
+  });
+  $('presetShrinkBtn').addEventListener('click', () => {
+    blueScaleX = 2.8; blueScaleY = 2.8;
+    orangeScaleX = 0.8; orangeScaleY = 0.8;
+    syncMyPortalDimensions(true);
+  });
+  $('presetEqualBtn').addEventListener('click', () => {
+    blueScaleX = 1.5; blueScaleY = 1.5;
+    orangeScaleX = 1.5; orangeScaleY = 1.5;
+    syncMyPortalDimensions(true);
+  });
+ 
+  (function initMyDefaultPortals() {
+    const myPair = getOrCreatePlayerPortalPair(_uid);
+    applyPortalTransform(myPair.blue, -8.28, 4.8, -6, 1, 0, 0, 2, null, blueScaleX, blueScaleY);
+    applyPortalTransform(myPair.orange, 8.28, 4.8, -6, -1, 0, 0, 3, null, orangeScaleX, orangeScaleY);
+    updatePortalDimensionUI();
+  })();
+ 
+  function placePortal(isOrange) {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = raycaster.intersectObjects(intersectableObjects, false).find((x) => !x.object.userData.isPlayer && x.object !== ghostMesh && x.distance < 180);
+    const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
+    const startBeam = fingerTipLocalPos.clone(); fingerGunGroup.localToWorld(startBeam);
+    if (!hit) {
+      spawnLaserBeam(startBeam, playerObj.position.clone().addScaledVector(aim, 60), isOrange ? 0xf97316 : 0x38bdf8);
+      return;
+    }
+    spawnLaserBeam(startBeam, hit.point, isOrange ? 0xf97316 : 0x38bdf8);
+    const myPair = getOrCreatePlayerPortalPair(_uid);
+    const p = isOrange ? myPair.orange : myPair.blue;
+    const sx = isOrange ? orangeScaleX : blueScaleX;
+    const sy = isOrange ? orangeScaleY : blueScaleY;
+    const norm = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize() : new THREE.Vector3(0, 1, 0);
+    const pos = hit.point.clone().addScaledVector(norm, 0.12);
+    const wallIdx = hit.object.userData?.wallIdx ?? -1;
+    const propId = hit.object.userData?.isProp ? hit.object.userData.id : null;
+
+    let upVec;
+    if (Math.abs(norm.y) > 0.7) {
+      const fwd = new THREE.Vector3(aim.x, 0, aim.z).normalize();
+      upVec = fwd.lengthSq() > 0.01 ? fwd : new THREE.Vector3(0, 0, -1);
+    } else {
+      upVec = new THREE.Vector3(0, 1, 0);
+    }
+
+    applyPortalTransform(p, pos.x, pos.y, pos.z, norm.x, norm.y, norm.z, wallIdx, propId, sx, sy, upVec.x, upVec.y, upVec.z);
+    if (isConnected) {
+      sendPacket({
+        type: 'placePortal', ownerId: _uid, isOrange,
+        x: pos.x, y: pos.y, z: pos.z, nx: norm.x, ny: norm.y, nz: norm.z,
+        scale: p.scale, scaleX: sx, scaleY: sy, wallIdx,
+        ux: upVec.x, uy: upVec.y, uz: upVec.z
+      });
+    }
+  }
+ 
+  function findClosestActivePortalPair(pt) {
+    let bestSrc = null, bestDst = null, minDist = Infinity;
+    for (const ownerId in playerPortals) {
+      const pair = playerPortals[ownerId];
+      if (!pair || !pair.blue.active || !pair.orange.active) continue;
+      const dB = pt.distanceTo(pair.blue.pos);
+      if (dB < minDist) { minDist = dB; bestSrc = pair.blue; bestDst = pair.orange; }
+      const dO = pt.distanceTo(pair.orange.pos);
+      if (dO < minDist) { minDist = dO; bestSrc = pair.orange; bestDst = pair.blue; }
+    }
+    return bestSrc ? { srcP: bestSrc, dstP: bestDst, dist: minDist } : null;
+  }
+ 
+  const _pCamWorldPos = new THREE.Vector3();
+  const _pCamQuat = new THREE.Quaternion();
+  const _pRotY180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+ 
+  function transformPointBetweenPortals(worldPt, srcP, dstP) {
+    const rel = worldPt.clone().sub(srcP.pos);
+    const srcInvQ = srcP.group.quaternion.clone().invert();
+    rel.applyQuaternion(srcInvQ);
+    rel.applyQuaternion(_pRotY180);
+    const rx = (dstP.scaleX || dstP.scale || 1.5) / (srcP.scaleX || srcP.scale || 1.5);
+    const ry = (dstP.scaleY || dstP.scale || 1.5) / (srcP.scaleY || srcP.scale || 1.5);
+    const rz = getPortalEffectiveScale(dstP) / getPortalEffectiveScale(srcP);
+    rel.set(rel.x * rx, rel.y * ry, rel.z * rz);
+    rel.applyQuaternion(dstP.group.quaternion);
+    return dstP.pos.clone().add(rel);
+  }
+ 
+  function transformQuatBetweenPortals(worldQ, srcP, dstP) {
+    const srcInvQ = srcP.group.quaternion.clone().invert();
+    return dstP.group.quaternion.clone().multiply(_pRotY180).multiply(srcInvQ).multiply(worldQ);
+  }
+ 
+  function transformVecBetweenPortals(worldVec, srcP, dstP) {
+    const srcInvQ = srcP.group.quaternion.clone().invert();
+    return worldVec.clone().applyQuaternion(srcInvQ).applyQuaternion(_pRotY180).applyQuaternion(dstP.group.quaternion);
+  }
+
+  function getPortalExitYaw(srcP, dstP, inYaw) {
+    if (!srcP || !dstP) return inYaw;
+    const isSrcFloor = srcP.normal.y > 0.6;
+    const isDstFloor = dstP.normal.y > 0.6;
+    const isDstWall = Math.abs(dstP.normal.y) <= 0.6;
+
+    if (isDstWall) {
+      const outDir = new THREE.Vector3(dstP.normal.x, 0, dstP.normal.z).normalize();
+      if (!isSrcFloor) {
+        const inLook = new THREE.Vector3(-Math.sin(inYaw), 0, -Math.cos(inYaw));
+        const transformedLook = transformVecBetweenPortals(inLook, srcP, dstP);
+        if (Math.hypot(transformedLook.x, transformedLook.z) > 0.05) {
+          return Math.atan2(-transformedLook.x, -transformedLook.z);
+        }
+      }
+      return Math.atan2(-outDir.x, -outDir.z);
+    }
+
+    if (isDstFloor) {
+      const forward = dstP.upVec ? new THREE.Vector3(dstP.upVec.x, 0, dstP.upVec.z).normalize() : new THREE.Vector3(0, 0, -1);
+      if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
+      return Math.atan2(-forward.x, -forward.z);
+    }
+
+    const outDir = dstP.normal.clone().negate();
+    if (Math.hypot(outDir.x, outDir.z) > 0.05) {
+      return Math.atan2(-outDir.x, -outDir.z);
+    }
+    return inYaw;
+  }
+ 
+  function updatePortalViews() {
+    camera.getWorldPosition(_pCamWorldPos);
+    camera.getWorldQuaternion(_pCamQuat);
+    const pr = renderer.getPixelRatio();
+ 
+    const prevFgVis = fingerGunGroup.visible;
+    const prevGhostVis = ghostMesh.visible;
+    const prevLocalRigVis = localRig.root.visible;
+    fingerGunGroup.visible = false;
+    ghostMesh.visible = false;
+    localRig.root.visible = true;
+ 
+    for (const ownerId in playerPortals) {
+      const pair = playerPortals[ownerId];
+      if (!pair) continue;
+      const linked = (pair.blue.active && pair.orange.active) ? 1 : 0;
+      pair.blue.surfaceMat.uniforms.uLinked.value = linked;
+      pair.orange.surfaceMat.uniforms.uLinked.value = linked;
+      if (!linked) continue;
+ 
+      if (_pCamWorldPos.distanceTo(pair.blue.pos) < 130 || _pCamWorldPos.distanceTo(pair.orange.pos) < 130) {
+        pair.blue.surfaceMat.uniforms.uResolution.value.set(innerWidth * pr, innerHeight * pr);
+        pair.orange.surfaceMat.uniforms.uResolution.value.set(innerWidth * pr, innerHeight * pr);
+        renderSinglePortalView(pair.blue, pair.orange);
+        renderSinglePortalView(pair.orange, pair.blue);
+      }
+    }
+ 
+    fingerGunGroup.visible = prevFgVis;
+    ghostMesh.visible = prevGhostVis;
+    localRig.root.visible = prevLocalRigVis;
+  }
+ 
+  function renderSinglePortalView(srcPortal, dstPortal) {
+    srcPortal.group.updateMatrixWorld();
+    dstPortal.group.updateMatrixWorld();
+ 
+    const pCam = srcPortal.cam;
+    const virtualPos = transformPointBetweenPortals(_pCamWorldPos, srcPortal, dstPortal);
+    const virtualQuat = transformQuatBetweenPortals(_pCamQuat, srcPortal, dstPortal);
+ 
+    const relFromDst = virtualPos.clone().sub(dstPortal.pos);
+    const normalOffset = relFromDst.dot(dstPortal.normal);
+    if (normalOffset < 0.08) virtualPos.addScaledVector(dstPortal.normal, 0.08 - normalOffset);
+ 
+    pCam.position.copy(virtualPos);
+    pCam.quaternion.copy(virtualQuat);
+    pCam.fov = camera.fov;
+    pCam.aspect = camera.aspect;
+    pCam.near = 0.05;
+    pCam.updateProjectionMatrix();
+ 
+    const prevClips = renderer.clippingPlanes;
+    renderer.clippingPlanes = [dstPortal.clipPlane];
+ 
+    srcPortal.inner.visible = false;
+    dstPortal.group.visible = false;
+    renderer.setRenderTarget(srcPortal.rt);
+    renderer.clear();
+    renderer.render(scene, pCam);
+    renderer.setRenderTarget(null);
+    srcPortal.inner.visible = true;
+    dstPortal.group.visible = true;
+ 
+    renderer.clippingPlanes = prevClips;
+  }
+ 
+  function spawnLaserBeam(startWorld, endWorld, colorHex) {
+    const mat = new THREE.LineBasicMaterial({ color: colorHex });
+    const geo = new THREE.BufferGeometry().setFromPoints([startWorld, endWorld]);
+    const line = new THREE.Line(geo, mat); scene.add(line);
+    setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 90);
+  }
+ 
+  // GRAFİK AYARLARI
+  function resizeAllPortalTargets(newRes) {
+    portalRes = newRes;
+    for (const ownerId in playerPortals) {
+      const pair = playerPortals[ownerId];
+      if (!pair) continue;
+      pair.blue.rt.setSize(portalRes, portalRes);
+      pair.orange.rt.setSize(portalRes, portalRes);
+    }
+  }
+ 
+  function applyGraphicsPreset(preset) {
+    if (preset === 'low') {
+      renderer.setPixelRatio(0.75);
+      $('resScaleSlider').value = 0.75; $('resScaleVal').textContent = '0.8x';
+      renderer.shadowMap.enabled = false; moonLight.castShadow = false; $('shadowsToggle').checked = false;
+      mapPointLights.forEach((l) => (l.visible = false)); $('pointLightsToggle').checked = false;
+      camera.far = 350; camera.updateProjectionMatrix(); scene.fog.density = 0.008;
+      $('drawDistSlider').value = 350; $('drawDistVal').textContent = '350m';
+      resizeAllPortalTargets(256);
+    } else if (preset === 'medium') {
+      renderer.setPixelRatio(1.0);
+      $('resScaleSlider').value = 1.0; $('resScaleVal').textContent = '1.0x';
+      renderer.shadowMap.enabled = false; moonLight.castShadow = false; $('shadowsToggle').checked = false;
+      mapPointLights.forEach((l) => (l.visible = true)); $('pointLightsToggle').checked = true;
+      camera.far = 550; camera.updateProjectionMatrix(); scene.fog.density = 0.0055;
+      $('drawDistSlider').value = 550; $('drawDistVal').textContent = '550m';
+      resizeAllPortalTargets(512);
+    } else if (preset === 'high') {
+      const pr = Math.min(devicePixelRatio, 1.5);
+      renderer.setPixelRatio(pr);
+      $('resScaleSlider').value = pr; $('resScaleVal').textContent = pr.toFixed(1) + 'x';
+      renderer.shadowMap.enabled = true; moonLight.castShadow = true;
+      moonLight.shadow.mapSize.set(1024, 1024); if (moonLight.shadow.map) { moonLight.shadow.map.dispose(); moonLight.shadow.map = null; }
+      $('shadowsToggle').checked = true;
+      mapPointLights.forEach((l) => (l.visible = true)); $('pointLightsToggle').checked = true;
+      camera.far = 750; camera.updateProjectionMatrix(); scene.fog.density = 0.004;
+      $('drawDistSlider').value = 750; $('drawDistVal').textContent = '750m';
+      resizeAllPortalTargets(768);
+    } else if (preset === 'ultra') {
+      const pr = Math.min(devicePixelRatio, 2.0);
+      renderer.setPixelRatio(pr);
+      $('resScaleSlider').value = pr; $('resScaleVal').textContent = pr.toFixed(1) + 'x';
+      renderer.shadowMap.enabled = true; moonLight.castShadow = true;
+      moonLight.shadow.mapSize.set(2048, 2048); if (moonLight.shadow.map) { moonLight.shadow.map.dispose(); moonLight.shadow.map = null; }
+      $('shadowsToggle').checked = true;
+      mapPointLights.forEach((l) => (l.visible = true)); $('pointLightsToggle').checked = true;
+      camera.far = 1100; camera.updateProjectionMatrix(); scene.fog.density = 0.0022;
+      $('drawDistSlider').value = 1100; $('drawDistVal').textContent = '1100m';
+      resizeAllPortalTargets(1024);
+    }
+    scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+  }
+ 
+  $('graphicsPresetSelect').addEventListener('change', (e) => applyGraphicsPreset(e.target.value));
+  $('resScaleSlider').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    renderer.setPixelRatio(v);
+    $('resScaleVal').textContent = v.toFixed(1) + 'x';
+  });
+  $('drawDistSlider').addEventListener('input', (e) => {
+    const d = parseFloat(e.target.value);
+    camera.far = d; camera.updateProjectionMatrix();
+    scene.fog.density = Math.max(0.0015, 2.7 / d);
+    $('drawDistVal').textContent = d + 'm';
+  });
+  $('pointLightsToggle').addEventListener('change', (e) => {
+    mapPointLights.forEach((l) => (l.visible = e.target.checked));
+  });
+ 
+  $('settingsBtn').addEventListener('click', () => {
+    settingsModal.style.display = settingsModal.style.display === 'block' ? 'none' : 'block';
+    if (settingsModal.style.display === 'block' && _d.pointerLockElement) _d.exitPointerLock();
+  });
+  $('closeSettingsBtn').addEventListener('click', () => (settingsModal.style.display = 'none'));
+  $('sensSlider').addEventListener('input', (e) => { lookSensitivity = +e.target.value; $('sensVal').innerText = lookSensitivity.toFixed(1) + 'x'; });
+  $('fovSlider').addEventListener('input', (e) => { camera.fov = +e.target.value; camera.updateProjectionMatrix(); $('fovVal').innerText = e.target.value + '°'; });
+  $('ragdollToggle').addEventListener('change', (e) => (ragdollEnabled = e.target.checked));
+  $('fingerGunToggle').addEventListener('change', (e) => { showFingerGun = e.target.checked; });
+  $('shadowsToggle').addEventListener('change', (e) => {
+    renderer.shadowMap.enabled = e.target.checked; moonLight.castShadow = e.target.checked;
+    scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+  });
+  $('respawnBtn').addEventListener('click', () => {
+    if (drivingCar) exitCar();
+    if (isShatteredLocal) endLocalRagdoll(true);
+    setPlayerScaleFactor(1.0);
+    playerBody.position.set(0, 15, 8); playerBody.velocity.set(0, 0, 0);
+    updateStatsUI(100, 50, 100); settingsModal.style.display = 'none';
+  });
+ 
+  function syncAdminButtonVisibility() {
+    if (_0xV.getAdm()) $('adminBtn').classList.remove('hidden');
+    else { $('adminBtn').classList.add('hidden'); adminModal.style.display = 'none'; }
+  }
+ 
+  function renderAdminModal() {
+    if (!_0xV.getAdm()) { adminModal.style.display = 'none'; return; }
+    const list = $('adminPlayerList'); list.innerHTML = '';
+    const allIds = [_uid, ...Object.keys(remotePlayers)];
+    allIds.forEach((id) => {
+      const isMe = id === _uid;
+      const hp = isMe ? _0xV.getHp() : (remotePlayers[id]?.hp ?? 100);
+      const row = _d.createElement('div');
+      row.className = 'flex items-center justify-between bg-gray-900/80 px-2 py-1 rounded';
+      row.innerHTML = `<span class="font-mono">${id}${isMe ? ' (Sen)' : ''} · ❤️${hp}</span>`;
+      const btns = _d.createElement('div'); btns.className = 'flex gap-1';
+      [['💚', 'heal'], ['💀', 'kill'], ['📍TP', 'tpTo'], ['🧲Çek', 'bring'], ['👑', 'makeAdmin'], ['🚪At', 'kick']].forEach(([lbl, act]) => {
+        if (isMe && (act === 'tpTo' || act === 'bring' || act === 'kick')) return;
+        const b = _d.createElement('button');
+        b.type = 'button';
+        b.className = 'px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded text-[10px] cursor-pointer';
+        b.textContent = lbl;
+        b.onclick = () => { if (_0xV.getAdm()) sendPacket({ type: 'adminAction', action: act, targetId: id }); };
+        btns.appendChild(b);
+      });
+      row.appendChild(btns); list.appendChild(row);
+    });
+  }
+ 
+  function toggleAdminModal() {
+    if (!_0xV.getAdm()) {
+      appendChatMessage('SİSTEM', '#ef4444', '⛔ Admin Paneli sadece yetkililerde çalışır!');
+      return;
+    }
+    const open = adminModal.style.display !== 'block';
+    adminModal.style.display = open ? 'block' : 'none';
+    if (open) { renderAdminModal(); if (_d.pointerLockElement) _d.exitPointerLock(); }
+  }
+ 
+  $('adminBtn').addEventListener('click', toggleAdminModal);
+  $('closeAdminBtn').addEventListener('click', () => (adminModal.style.display = 'none'));
+ 
+  $('startAdminAuthBtn').addEventListener('click', () => {
+    const pw = $('startAdminPassInput').value.trim();
+    if (!pw) return;
+    _admPw = pw;
+    if (isConnected) sendPacket({ type: 'chat', text: '/admin ' + pw });
+    else setStatus('Yetkili şifresi kaydedildi. Bağlanınca doğrulanacak.', 'text-yellow-300');
+  });
+ 
+  $('admGodBtn').addEventListener('click', () => {
+    if (!_0xV.getAdm()) return;
+    _0xV.setGod(!_0xV.getGod());
+    $('admGodBtn').textContent = `🛡️ Ölümsüzlük: ${_0xV.getGod() ? 'AÇIK' : 'KAPALI'}`;
+    updateStatsUI(_0xV.getHp());
+    if (isConnected) sendPacket({ type: 'chat', text: '/god' });
+  });
+  $('admFlyBtn').addEventListener('click', () => {
+    if (!_0xV.getAdm()) return;
+    _0xV.setFly(!_0xV.getFly());
+    $('admFlyBtn').textContent = `🕊️ Uçma (Fly): ${_0xV.getFly() ? 'AÇIK' : 'KAPALI'}`;
+  });
+  $('admSpeedBtn').addEventListener('click', () => {
+    if (!_0xV.getAdm()) return;
+    const cur = _0xV.getSpd();
+    _0xV.setSpd(cur === 1 ? 2.2 : (cur === 2.2 ? 3.5 : 1));
+    $('admSpeedBtn').textContent = `⚡ Süper Hız: ${_0xV.getSpd()}x`;
+  });
+  $('admHealSelfBtn').addEventListener('click', () => {
+    if (!_0xV.getAdm()) return;
+    updateStatsUI(100, 100, 100); sendPacket({ type: 'healSelf', amount: 100, armor: 100 });
+  });
+  $('admHealAllBtn').addEventListener('click', () => { if (_0xV.getAdm()) sendPacket({ type: 'adminAction', action: 'heal', targetId: 'all' }); });
+  $('admKillAllBtn').addEventListener('click', () => { if (_0xV.getAdm()) sendPacket({ type: 'adminAction', action: 'kill', targetId: 'all' }); });
+  $('admAnnounceBtn').addEventListener('click', () => {
+    if (!_0xV.getAdm()) return;
+    const t = $('admAnnounceInput').value.trim();
+    if (t) { sendPacket({ type: 'adminAction', action: 'announce', text: t }); $('admAnnounceInput').value = ''; }
+  });
+ 
+  // OYUNCU FİZİĞİ & BÜYÜME/KÜÇÜLME SİSTEMİ
+  const playerBody = new CANNON.Body({ mass: 5, material: playerMat, linearDamping: 0.01, allowSleep: false });
+  playerBody.addShape(new CANNON.Sphere(playerRadius));
+  playerBody.position.set(0, 15, 8);
+  playerBody.fixedRotation = true; playerBody.updateMassProperties();
+  world.addBody(playerBody);
+  let jumpCooldown = 0;
+ 
+  function setPlayerScaleFactor(newScale) {
+    playerScale = Math.max(0.25, Math.min(4.5, newScale));
+    playerRadius = BASE_PLAYER_RADIUS * playerScale;
+    if (playerBody.shapes[0]) {
+      playerBody.shapes[0].radius = playerRadius;
+      playerBody.shapes[0].updateBoundingSphereRadius();
+      playerBody.updateBoundingRadius();
+      playerBody.computeAABB();
+    }
+    localRig.root.scale.set(playerScale, playerScale, playerScale);
+    localPortalCloneRig.root.scale.set(playerScale, playerScale, playerScale);
+    marbleMesh.scale.set(playerScale, playerScale, playerScale);
+    applyCameraRig();
+    updateStatsUI();
+  }
+ 
+  $('scaleBadge').addEventListener('click', () => setPlayerScaleFactor(1.0));
+  $('resetMySizeBtn').addEventListener('click', () => setPlayerScaleFactor(1.0));
+ 
+  playerBody.addEventListener('collide', (e) => {
+    const other = e.body;
+    if (!other) return;
+    if (other.isTrampoline && jumpCooldown <= 0) { playerBody.velocity.y = 26 * Math.sqrt(playerScale); jumpCooldown = 0.2; }
+    else if (other.isMedkit && _0xV.getHp() < 100) {
+      updateStatsUI(_0xV.getHp() + 50);
+      if (isConnected) sendPacket({ type: 'healSelf', amount: 50 });
+      if (other.propId) { removeProp(other.propId); if (isConnected) sendPacket({ type: 'removeProp', id: other.propId }); }
+    }
+  });
+ 
+  function isBodyGrounded(b) {
+    for (const c of world.contacts) {
+      if (c.bi.id === b.id || c.bj.id === b.id) {
+        const up = c.bi.id === b.id ? -c.ni.y : c.ni.y;
+        if (up > 0.35) return true;
+      }
+    }
+    return false;
+  }
+  function tryJump() {
+    if (drivingCar || isShatteredLocal || jumpCooldown > 0) return;
+    if (_0xV.getFly() || isBodyGrounded(playerBody)) {
+      playerBody.velocity.y = 13 * Math.sqrt(playerScale) * (_0xV.getSpd() > 1 ? 1.2 : 1);
+      jumpCooldown = 0.18;
+    }
+  }
+ 
+  let marbleMode = false;
+  const marbleMat = new CANNON.Material('marble');
+  world.addContactMaterial(new CANNON.ContactMaterial(marbleMat, pm, { friction: 0.8, restitution: 0.25 }));
+  const marbleGeo = new THREE.SphereGeometry(BASE_PLAYER_RADIUS, 32, 24);
+  function makeMarbleMat(color) {
+    const c = _d.createElement('canvas'); c.width = 256; c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = color; x.fillRect(0, 0, 256, 128);
+    return new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c), roughness: 0.12, metalness: 0.35 });
+  }
+  const marbleMesh = new THREE.Mesh(marbleGeo, makeMarbleMat('#00aaaa'));
+  marbleMesh.castShadow = true; marbleMesh.visible = false; scene.add(marbleMesh);
+  function setLocalMarbleColor() { marbleMesh.material.map.dispose(); marbleMesh.material.dispose(); marbleMesh.material = makeMarbleMat('#00aaaa'); }
+  function applyCameraRig() {
+    if (marbleMode) { camera.position.set(0, 1.5 * playerScale, 7 * playerScale); pitchObj.position.set(0, 0.3 * playerScale, 0); }
+    else if (thirdPerson) { camera.position.set(0, 1.1 * playerScale, 4.8 * playerScale); pitchObj.position.set(0, 1.35 * playerScale, 0); }
+    else { camera.position.set(0, 0, 0); pitchObj.position.set(0, 1.25 * playerScale, 0); }
+  }
+  function setMarble(on) {
+    if (on === marbleMode) return;
+    marbleMode = on;
+    const b = playerBody;
+    b.fixedRotation = !on; b.material = on ? marbleMat : playerMat;
+    b.updateMassProperties(); b.angularVelocity.set(0, 0, 0);
+    if (!on) b.quaternion.set(0, 0, 0, 1);
+    applyCameraRig(); syncPlayerState(true);
+  }
+  function toggleMarble() { if (!isPlaying || drivingCar || isShatteredLocal) return; setMarble(!marbleMode); }
+ 
+  const activeCars = {};
+  let drivingCar = null;
+  const CAR_Y = 1.15;
+  const tmpQ = new THREE.Quaternion();
+ 
+  function createCarObject(id, data) {
+    if (activeCars[id]) return activeCars[id];
+    const color = isHex(data.color) ? data.color : '#ff0055';
+    const group = new THREE.Group(), model = new THREE.Group();
+    model.position.y = -1.1; group.add(model);
+    const chassisMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 4.8), new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.6 }));
+    chassisMesh.position.y = 0.75; model.add(chassisMesh);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.75, 2.4), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.1, metalness: 0.9 }));
+    cabin.position.set(0, 1.5, -0.2); model.add(cabin);
+    const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 16); wheelGeo.rotateZ(Math.PI / 2);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+    const wheels = [];
+    [[-1.35, 0.55, -1.5], [1.35, 0.55, -1.5], [-1.35, 0.55, 1.5], [1.35, 0.55, 1.5]].forEach((p, i) => {
+      const pivot = new THREE.Object3D(); pivot.position.set(...p);
+      const m = new THREE.Mesh(wheelGeo, wheelMat); pivot.add(m); model.add(pivot);
+      wheels.push({ pivot, mesh: m, isFront: i < 2 });
+    });
+    chassisMesh.userData = { isCar: true, id }; intersectableObjects.push(chassisMesh); scene.add(group);
+ 
+    const portalClone = model.clone();
+    portalClone.visible = false;
+    scene.add(portalClone);
+ 
+    const body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, material: pm, allowSleep: false });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(1.3, 0.65, 2.4)));
+    body.position.set(data.x ?? 0, data.y ?? CAR_Y, data.z ?? 0);
+    if (data.qx !== undefined) body.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+    syncBodyAABB(body); world.addBody(body);
+ 
+    const car = {
+      id, color, group, model, portalClone, chassisMesh, wheels, body, vehicle: null, driverId: null, steer: 0, wheelSpin: 0,
+      scaleFactor: 1.0,
+      portalCd: 0,
+      tp: new THREE.Vector3().copy(body.position), tq: new THREE.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
+      prev: new THREE.Vector3().copy(body.position)
+    };
+    group.position.copy(body.position); group.quaternion.copy(body.quaternion);
+    activeCars[id] = car; return car;
+  }
+ 
+  function makeVehicle(car) {
+    const v = new CANNON.RaycastVehicle({ chassisBody: car.body, indexRightAxis: 0, indexUpAxis: 1, indexForwardAxis: 2 });
+    const o = {
+      radius: 0.55 * (car.scaleFactor || 1), directionLocal: new CANNON.Vec3(0, -1, 0), axleLocal: new CANNON.Vec3(-1, 0, 0),
+      suspensionStiffness: 35, suspensionRestLength: 0.35 * (car.scaleFactor || 1), maxSuspensionTravel: 0.3 * (car.scaleFactor || 1), maxSuspensionForce: 100000,
+      frictionSlip: 3, dampingRelaxation: 2.3, dampingCompression: 4.4, rollInfluence: 0.01,
+      customSlidingRotationalSpeed: -30, useCustomSlidingRotationalSpeed: true, chassisConnectionPointLocal: new CANNON.Vec3()
+    };
+    const sf = car.scaleFactor || 1;
+    [[-1.35 * sf, -0.3 * sf, -1.5 * sf], [1.35 * sf, -0.3 * sf, -1.5 * sf], [-1.35 * sf, -0.3 * sf, 1.5 * sf], [1.35 * sf, -0.3 * sf, 1.5 * sf]].forEach((p) => { o.chassisConnectionPointLocal.set(...p); v.addWheel(o); });
+    v.addToWorld(world); return v;
+  }
+ 
+  createCarObject('car_default_1', { x: 14, y: CAR_Y, z: 12, color: '#00f5d4' });
+  createCarObject('car_default_2', { x: -14, y: CAR_Y, z: 12, color: '#f72585' });
+ 
+  $('spawnCarBtn').addEventListener('click', () => {
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+    const b = drivingCar ? drivingCar.body.position : playerBody.position;
+    const data = { type: 'spawnCar', id: 'car_' + Date.now(), color: randHex(), x: b.x + dir.x * 8, y: b.y + 1, z: b.z + dir.z * 8, qx: 0, qy: 0, qz: 0, qw: 1, driverId: '' };
+    createCarObject(data.id, data); sendPacket(data);
+  });
+ 
+  function findNearestAvailableCar() {
+    let best = null, min = 6 * Math.max(1, playerScale);
+    for (const id in activeCars) {
+      const c = activeCars[id];
+      if (c.driverId && c.driverId !== _uid) continue;
+      const d = playerBody.position.distanceTo(c.body.position);
+      if (d < min) { min = d; best = c; }
+    }
+    return best;
+  }
+ 
+  function enterCar(car) {
+    if (marbleMode) setMarble(false);
+    car.driverId = _uid; drivingCar = car;
+    world.removeBody(playerBody);
+    const b = car.body;
+    b.type = CANNON.Body.DYNAMIC; b.mass = 150; b.updateMassProperties();
+    b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0);
+    car.vehicle = makeVehicle(car);
+    camera.position.set(0, 0, 0); pitchObj.position.set(0, 2.5 * (car.scaleFactor || 1), 2.2 * (car.scaleFactor || 1));
+    sendCarState(car); syncPlayerState(true);
+  }
+  function exitCar() {
+    const car = drivingCar; if (!car) return;
+    car.vehicle.removeFromWorld(world); car.vehicle = null;
+    world.addBody(car.body);
+    const b = car.body;
+    b.type = CANNON.Body.KINEMATIC; b.mass = 0; b.updateMassProperties();
+    b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0); syncBodyAABB(b);
+    car.tp.copy(b.position); car.tq.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+    car.driverId = null; drivingCar = null;
+    playerBody.position.set(b.position.x - 2.8 * (car.scaleFactor || 1), b.position.y + 0.5, b.position.z);
+    playerBody.velocity.set(0, 0, 0);
+    world.addBody(playerBody); applyCameraRig();
+    sendCarState(car); syncPlayerState(true);
+  }
+  function handleInteractKey() {
+    if (!isPlaying || isShatteredLocal) return;
+    if (drivingCar) return exitCar();
+    if (grabbedProp) { grabbedProp = null; return; }
+    const st = findNearestStatue();
+    if (st) {
+      setSkinType(st.skin);
+      appendChatMessage('KOSTÜM', '#34d399', `${st.title} kuşanıldı!`);
+      return;
+    }
+    const c = findNearestAvailableCar(); if (c) enterCar(c);
+  }
+  vehiclePrompt.addEventListener('click', handleInteractKey);
+ 
+  function sendCarState(car) {
+    const b = car.body;
+    sendPacket({ type: 'carUpdate', id: car.id, color: car.color, x: b.position.x, y: b.position.y, z: b.position.z,
+      qx: b.quaternion.x, qy: b.quaternion.y, qz: b.quaternion.z, qw: b.quaternion.w, steerAngle: car.steer, driverId: car.driverId || '' });
+  }
+  function applyRemoteCarState(car, d) {
+    car.driverId = d.driverId ? d.driverId : null; car.steer = d.steerAngle || 0;
+    car.tp.set(d.x, d.y, d.z); if (d.qx !== undefined) car.tq.set(d.qx, d.qy, d.qz, d.qw);
+  }
+ 
+  // OBJE TANIMLARI
+  const PROP_TYPES = {
+    ramp:       { s: 'box',  h: [4, 0.5, 7],       m: 0, tilt: 0.28, lift: 1.45, i: '📐', l: 'Rampa' },
+    steepRamp:  { s: 'box',  h: [4, 0.5, 7],       m: 0, tilt: 0.48, lift: 2.65, i: '🚀', l: 'Dik Rampa' },
+    megaRamp:   { s: 'box',  h: [7, 0.6, 11],      m: 0, tilt: 0.34, lift: 3.10, i: '🎢', l: 'Mega Rampa' },
+    bridge:     { s: 'box',  h: [2.5, 0.3, 8],     m: 0, lift: 0.3,              i: '🌉', l: 'Köprü' },
+    wall:       { s: 'box',  h: [6, 3, 0.5],       m: 0, lift: 3.0,              i: '🧱', l: 'Duvar' },
+    platform:   { s: 'box',  h: [5, 0.5, 5],       m: 0, lift: 0.5,              i: '⬛', l: 'Platform' },
+    pillar:     { s: 'box',  h: [1.5, 4, 1.5],     m: 0, lift: 4.0,              i: '🏛️', l: 'Sütun' },
+    trampoline: { s: 'box',  h: [2.5, 0.3, 2.5],   m: 0, lift: 0.3, bounce: true, i: '🟣', l: 'Trambolin' },
+    medkit:     { s: 'box',  h: [0.8, 0.5, 0.8],   m: 4,   medkit: true, fixedColor: '#ef4444', i: '➕', l: 'İlk Yardım (+50HP)' },
+    box:        { s: 'box',  h: [1, 1, 1],         m: 5,   i: '📦', l: 'Kutu' },
+    ball:       { s: 'ball', r: 1.2,               m: 4,   i: '⚽', l: 'Top' },
+    bigball:    { s: 'ball', r: 2.5,               m: 14,  i: '🔵', l: 'Dev Top' },
+    crate:      { s: 'box',  h: [2, 2, 2],         m: 12,  i: '🧰', l: 'Ağır Sandık' },
+    barrel:     { s: 'box',  h: [0.9, 1.3, 0.9],   m: 6,   cyl: true,  i: '🛢️', l: 'Varil' },
+    plank:      { s: 'box',  h: [4, 0.25, 1],      m: 6,   i: '📏', l: 'Uzun Tahta' },
+    domino:     { s: 'box',  h: [0.3, 1.5, 1],     m: 4,   i: '🁢', l: 'Domino' },
+    cone:       { s: 'box',  h: [0.6, 0.9, 0.6],   m: 3,   cone: true, i: '🚧', l: 'Trafik Konisi' },
+    duck:       { s: 'box',  h: [0.85, 0.85, 1.0], m: 3,   fixedColor: '#facc15', i: '🦆', l: 'Plastik Ördek' },
+    melon:      { s: 'ball', r: 0.95,              m: 4,   fixedColor: '#16a34a', i: '🍉', l: 'Karpuz' },
+    bowlingPin: { s: 'box',  h: [0.45, 1.35, 0.45],m: 3,   cyl: true, fixedColor: '#f8fafc', i: '🎳', l: 'Bovling Labutu' },
+    sofa:       { s: 'box',  h: [2.2, 0.85, 1.0],  m: 10,  fixedColor: '#dc2626', i: '🛋️', l: 'Koltuk' },
+    fridge:     { s: 'box',  h: [0.95, 1.9, 0.95], m: 16,  fixedColor: '#e2e8f0', i: '🧊', l: 'Buzdolabı' },
+    tv:         { s: 'box',  h: [1.3, 0.9, 0.4],   m: 6,   fixedColor: '#1e293b', i: '📺', l: 'Televizyon' },
+    dice:       { s: 'box',  h: [1.1, 1.1, 1.1],   m: 5,   fixedColor: '#ffffff', i: '🎲', l: 'Dev Zar' },
+    tire:       { s: 'box',  h: [1.1, 0.55, 1.1],  m: 5,   cyl: true, bounce: true, fixedColor: '#1f2937', i: '🛞', l: 'Zıplayan Lastik' },
+    anvil:      { s: 'box',  h: [1.2, 0.8, 0.7],   m: 35,  fixedColor: '#334155', i: '🔨', l: 'Ağır Örs' },
+    snowman:    { s: 'ball', r: 1.35,              m: 6,   fixedColor: '#f0f9ff', i: '⛄', l: 'Kardan Adam' }
+  };
+  const PROP_ORDER = Object.keys(PROP_TYPES);
+  const DYNAMIC_PROP_KEYS = PROP_ORDER.filter((k) => PROP_TYPES[k].m > 0);
+  const geoCache = {};
+  function propGeo(type) {
+    if (!geoCache[type]) {
+      const t = PROP_TYPES[type];
+      if (t.s === 'ball') geoCache[type] = new THREE.SphereGeometry(t.r, 20, 16);
+      else if (t.cyl) geoCache[type] = new THREE.CylinderGeometry(t.h[0], t.h[0], t.h[1] * 2, 18);
+      else if (t.cone) geoCache[type] = new THREE.ConeGeometry(t.h[0], t.h[1] * 2, 16);
+      else geoCache[type] = new THREE.BoxGeometry(t.h[0] * 2, t.h[1] * 2, t.h[2] * 2);
+    }
+    return geoCache[type];
+  }
+ 
+  let selectedObj = 'ramp', buildYawStep = 0;
+  const activeProps = {};
+  const ghostMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.42 });
+  const ghostMesh = new THREE.Mesh(propGeo(selectedObj), ghostMat);
+  ghostMesh.visible = false; scene.add(ghostMesh);
+ 
+  function selectObjectType(type) {
+    if (!PROP_TYPES[type]) return;
+    selectedObj = type; ghostMesh.geometry = propGeo(type);
+    _d.querySelectorAll('.obj-card').forEach((el) => el.classList.toggle('active', el.dataset.type === type));
+  }
+  function rotateSelectedObject() { buildYawStep = (buildYawStep + 1) % 8; }
+ 
+  function computePlacementTransform(type) {
+    const t = PROP_TYPES[type];
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = raycaster.intersectObjects(intersectableObjects, false).find((x) => !x.object.userData.isPlayer && x.object !== ghostMesh && x.distance < 85);
+    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    const base = hit ? hit.point.clone() : new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z).addScaledVector(dir, 12);
+    const lift = t.lift !== undefined ? t.lift : (t.h ? t.h[1] : t.r) + 0.2;
+    const totalYaw = yawObj.rotation.y + buildYawStep * (Math.PI / 4);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(t.tilt || 0, totalYaw, 0, 'YXZ'));
+    return { x: base.x, y: base.y + lift, z: base.z, q };
+  }
+ 
+  function spawnPropVisual(id, d) {
+    if (activeProps[id]) return activeProps[id];
+    const type = PROP_TYPES[d.propType] ? d.propType : 'box';
+    const t = PROP_TYPES[type];
+    const isStatic = !t.m;
+    const color = t.fixedColor || (t.bounce ? '#a855f7' : (isHex(d.color) ? d.color : '#ffffff'));
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+    const mesh = new THREE.Mesh(propGeo(type), mat);
+    mesh.castShadow = mesh.receiveShadow = true; mesh.position.set(d.x, d.y, d.z);
+    if (d.qx !== undefined) mesh.quaternion.set(d.qx, d.qy, d.qz, d.qw);
+    mesh.userData = { isProp: true, id }; scene.add(mesh); intersectableObjects.push(mesh);
+ 
+    let portalClone = null;
+    if (!isStatic) {
+      portalClone = new THREE.Mesh(propGeo(type), mat.clone());
+      portalClone.castShadow = true;
+      portalClone.visible = false;
+      scene.add(portalClone);
+    }
+ 
+    const shape = t.s === 'ball' ? new CANNON.Sphere(t.r) : new CANNON.Box(new CANNON.Vec3(t.h[0], t.h[1], t.h[2]));
+    const body = new CANNON.Body({
+      mass: isStatic ? 0 : t.m,
+      type: isStatic ? CANNON.Body.STATIC : CANNON.Body.DYNAMIC,
+      material: t.bounce ? bounceMat : pm,
+      linearDamping: 0.28,
+      angularDamping: 0.72
+    });
+    body.isTrampoline = !!t.bounce; body.isMedkit = !!t.medkit; body.propId = id;
+    body.addShape(shape); body.position.copy(mesh.position);
+    body.quaternion.set(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
+    syncBodyAABB(body); world.addBody(body);
+ 
+    const baseBoundR = t.s === 'ball' ? t.r : Math.max(t.h[0], t.h[1], t.h[2]);
+    const p = { id, propType: type, mesh, portalClone, baseBoundR, boundR: baseBoundR, scaleFactor: 1.0, body, isStatic, portalCd: 0 };
+    activeProps[id] = p; return p;
+  }
+ 
+  function applyPropScaleFactor(p, newFactor) {
+    if (!p || p.isStatic) return;
+    const sf = Math.max(0.25, Math.min(4.5, newFactor));
+    p.scaleFactor = sf;
+    const t = PROP_TYPES[p.propType];
+    p.mesh.scale.set(sf, sf, sf);
+    if (p.portalClone) p.portalClone.scale.set(sf, sf, sf);
+    p.boundR = p.baseBoundR * sf;
+ 
+    if (p.body && p.body.shapes[0]) {
+      if (t.s === 'ball') {
+        p.body.shapes[0].radius = t.r * sf;
+        p.body.shapes[0].updateBoundingSphereRadius();
+      } else {
+        p.body.shapes[0].halfExtents.set(t.h[0] * sf, t.h[1] * sf, t.h[2] * sf);
+        p.body.shapes[0].updateConvexPolyhedronRepresentation();
+        p.body.shapes[0].updateBoundingSphereRadius();
+      }
+      p.body.updateBoundingRadius();
+      p.body.computeAABB();
+    }
+  }
+ 
+  function applyControlledPush(body, fx, fy, fz) {
+    if (!body) return;
+    body.wakeUp();
+    const scale = 1 / Math.max(2.5, body.mass * 0.32);
+    body.velocity.x = Math.max(-32, Math.min(32, body.velocity.x + fx * scale));
+    body.velocity.y = Math.max(-28, Math.min(28, body.velocity.y + fy * scale + 2.5));
+    body.velocity.z = Math.max(-32, Math.min(32, body.velocity.z + fz * scale));
+    body.angularVelocity.x = Math.max(-3.5, Math.min(3.5, body.angularVelocity.x + (Math.random() - 0.5) * 1.4));
+    body.angularVelocity.y = Math.max(-3.5, Math.min(3.5, body.angularVelocity.y + (Math.random() - 0.5) * 1.4));
+    body.angularVelocity.z = Math.max(-3.5, Math.min(3.5, body.angularVelocity.z + (Math.random() - 0.5) * 1.4));
+  }
+ 
+  function removeProp(id) {
+    const p = activeProps[id]; if (!p) return;
+    if (grabbedProp === p) grabbedProp = null;
+    scene.remove(p.mesh); p.mesh.material.dispose();
+    if (p.portalClone) { scene.remove(p.portalClone); p.portalClone.material.dispose(); }
+    const i = intersectableObjects.indexOf(p.mesh); if (i > -1) intersectableObjects.splice(i, 1);
+    if (p.body) world.removeBody(p.body); delete activeProps[id];
+  }
+ 
+  function spawnObject(type, customPos) {
+    const t = PROP_TYPES[type]; if (!t || !isPlaying) return null;
+    const tr = customPos || computePlacementTransform(type);
+    const id = 'p_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const data = {
+      type: 'spawnProp', id, propType: type, color: t.fixedColor || randHex(),
+      x: tr.x, y: tr.y, z: tr.z, qx: tr.q ? tr.q.x : 0, qy: tr.q ? tr.q.y : 0, qz: tr.q ? tr.q.z : 0, qw: tr.q ? tr.q.w : 1
+    };
+    const created = spawnPropVisual(id, data);
+    if (isConnected) sendPacket(data); return created;
+  }
+ 
+  function spawnRandomItem(customPos) {
+    if (!isPlaying) return null;
+    const randKey = DYNAMIC_PROP_KEYS[Math.floor(Math.random() * DYNAMIC_PROP_KEYS.length)];
+    selectObjectType(randKey); return spawnObject(randKey, customPos);
+  }
+ 
+  function spawnRandomRain() {
+    if (!isPlaying) return;
+    const tr = computePlacementTransform(selectedObj);
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        spawnRandomItem({ x: tr.x + (Math.random() - 0.5) * 8, y: tr.y + 8 + i * 2.2, z: tr.z + (Math.random() - 0.5) * 8, q: new THREE.Quaternion() });
+      }, i * 90);
+    }
+  }
+ 
+  $('randomPropBtn').addEventListener('click', (e) => { e.currentTarget.blur(); spawnRandomItem(); });
+  $('menuRandomSingleBtn').addEventListener('click', () => spawnRandomItem());
+  $('menuRandomRainBtn').addEventListener('click', () => spawnRandomRain());
+ 
+  function deleteAimed() {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = raycaster.intersectObjects(intersectableObjects, true).find((x) => !(x.object.userData.isPlayer && !x.object.visible) && x.object !== ghostMesh);
+    if (!hit) return;
+    let obj = hit.object; while (obj.parent && !obj.userData.isProp) obj = obj.parent;
+    if (!obj.userData || !obj.userData.isProp) return;
+    const id = obj.userData.id; removeProp(id);
+    if (isConnected) sendPacket({ type: 'removeProp', id });
+  }
+ 
+  function toggleBuildMenu() {
+    const open = buildMenu.style.display !== 'block';
+    buildMenu.style.display = open ? 'block' : 'none';
+    if (open && _d.pointerLockElement) _d.exitPointerLock();
+    else if (!open && !mobileMode && innerWidth > 768 && isPlaying) _d.body.requestPointerLock();
+  }
+ 
+  (function() {
+    const gStatic = $('buildGridStatic'), gDyn = $('buildGridDynamic');
+    PROP_ORDER.forEach((k, i) => {
+      const t = PROP_TYPES[k], card = _d.createElement('div');
+      card.className = 'obj-card' + (k === selectedObj ? ' active' : ''); card.dataset.type = k;
+      const keyHint = i < 10 ? `[${(i + 1) % 10}]` : '';
+      card.innerHTML = `<span>${t.i} ${t.l}</span><span class="text-xs text-emerald-300 font-mono">${keyHint}</span>`;
+      card.onclick = () => { selectObjectType(k); spawnObject(k); };
+      if (t.m === 0) gStatic.appendChild(card); else gDyn.appendChild(card);
+    });
+    $('buildBtn').addEventListener('click', (e) => { e.currentTarget.blur(); toggleBuildMenu(); });
+    $('closeBuildBtn').addEventListener('click', toggleBuildMenu);
+    $('spawnSelectedBtn').addEventListener('click', () => spawnObject(selectedObj));
+    $('deleteAimedBtn').addEventListener('click', deleteAimed);
+    $('clearPropsBtn').addEventListener('click', (e) => {
+      e.currentTarget.blur();
+      if (!_0xV.getAdm() && isConnected) {
+        appendChatMessage('SİSTEM', '#ef4444', '⛔ Tüm objeleri sadece Admin temizleyebilir!');
+        return;
+      }
+      Object.keys(activeProps).forEach(removeProp);
+      if (isConnected) sendPacket({ type: 'clearProps' });
+    });
+  })();
+ 
+  let socket = null, udpSocket = null;
+  let isConnected = false, lastSyncTime = 0;
+  const remotePlayers = {};
+ 
+  function formatWsUrl(raw) {
+    let a = raw.trim();
+    if (!a) {
+      a = (location.hostname && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
+        ? location.host
+        : '127.0.0.1:3000';
+    }
+    if (!/^wss?:\/\//.test(a)) {
+      const host = a.split(':')[0];
+      const plain = /^(127\.|localhost|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.(joinmc\.link|ply\.gg|playit\.gg)$/.test(host);
+      const secure = !plain && (location.protocol === 'https:' || /\.(onrender\.com|glitch\.me|bonto\.dev)$/.test(host));
+      a = (secure ? 'wss://' : 'ws://') + a;
+    }
+    return a;
+  }
+  function loadServers() { try { return JSON.parse(localStorage.getItem('servers') || '[]'); } catch (e) { return []; } }
+  function saveServers(l) { try { localStorage.setItem('servers', JSON.stringify(l.slice(0, 12))); } catch (e) {} }
+  function renderServers() {
+    const box = $('savedServers'); box.innerHTML = '';
+    loadServers().forEach((s) => {
+      const b = _d.createElement('button'); b.type = 'button';
+      b.className = 'px-2 py-1 bg-gray-800 border border-cyan-500/40 rounded text-xs font-mono cursor-pointer';
+      b.textContent = s + ' '; b.onclick = () => { serverIpInput.value = s; };
+      const x = _d.createElement('span'); x.textContent = '✕'; x.className = 'text-red-400 ml-1';
+      x.onclick = (e) => { e.stopPropagation(); saveServers(loadServers().filter((v) => v !== s)); renderServers(); };
+      b.appendChild(x); box.appendChild(b);
+    });
+  }
+  $('saveServerBtn').addEventListener('click', () => {
+    const v = serverIpInput.value.trim().slice(0, 80); if (!v) return;
+    const l = loadServers(); if (!l.includes(v)) l.unshift(v); saveServers(l); renderServers();
+  });
+  $('localServerBtn').addEventListener('click', () => { serverIpInput.value = '127.0.0.1:3000'; });
+  try { const ls = localStorage.getItem('lastServer'); if (ls) serverIpInput.value = ls; } catch (e) {}
+  renderServers();
+  function setStatus(t, cls) { authStatus.innerText = t; authStatus.className = cls + ' mb-3 font-mono text-xs text-center'; }
+ 
+  function sendJoinPayload() {
+    const startPw = $('startAdminPassInput') ? $('startAdminPassInput').value.trim() : '';
+    if (startPw) _admPw = startPw;
+    sendPacket({
+      type: 'join', id: _uid, adminPass: _admPw,
+      color: myColor, skin: mySkin, playerScale: playerScale,
+      x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z, yaw: yawObj.rotation.y
+    });
+  }
+ 
+  function connectToServer() {
+    const raw = serverIpInput.value.trim() || '127.0.0.1:3000';
+    try { localStorage.setItem('lastServer', raw); } catch (e) {}
+ 
+    if (socket) { socket.onclose = null; socket.close(); socket = null; }
+    if (udpSocket) { try { udpSocket.close(); } catch (e) {} udpSocket = null; }
+ 
+    const url = formatWsUrl(raw);
+    setStatus(`Bağlanılıyor: ${url}...`, 'text-cyan-400 animate-pulse');
+    try { socket = new WebSocket(url); } catch (e) { setStatus('Geçersiz Sunucu Adresi.', 'text-red-400'); return; }
+    socket.onopen = () => {
+      isConnected = true; setStatus(`Bağlandı! (${url})`, 'text-green-400');
+      sendJoinPayload();
+    };
+    socket.onmessage = (e) => { try { handleServerMessage(JSON.parse(e.data)); } catch (err) {} };
+    socket.onerror = () => {
+      isConnected = false;
+      setStatus(`Çevrimdışı Mod (${url} adresine ulaşılamadı)`, 'text-amber-400');
+    };
+    socket.onclose = () => { isConnected = false; Object.keys(remotePlayers).forEach(removeRemotePlayer); };
+  }
+ 
+  function sendPacket(o) {
+    const str = JSON.stringify(o);
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(str);
+  }
+ 
+  function handleServerMessage(msg) {
+    if (!msg || !msg.type) return;
+    switch (msg.type) {
+      case 'init': {
+        const oldUid = _uid;
+        _uid = msg.selfId || _uid; _syncAnonUI();
+        if (oldUid !== _uid && playerPortals[oldUid]) {
+          playerPortals[_uid] = playerPortals[oldUid];
+          delete playerPortals[oldUid];
+        }
+        _0xV.setAdm(!!msg.isAdmin); syncAdminButtonVisibility();
+        (msg.players || []).forEach((p) => p.id !== _uid && updateOrCreateRemotePlayer(p));
+        (msg.props || []).forEach((p) => spawnPropVisual(p.id, p));
+        (msg.cars || []).forEach((c) => { const car = createCarObject(c.id, c); if (drivingCar !== car) applyRemoteCarState(car, c); });
+        if (msg.portalsByPlayer) {
+          for (const ownerId in msg.portalsByPlayer) {
+            const pPair = msg.portalsByPlayer[ownerId];
+            const localPair = getOrCreatePlayerPortalPair(ownerId);
+            if (pPair.blue) {
+              const bx = pPair.blue.scaleX || pPair.blue.scale || 1.5;
+              const by = pPair.blue.scaleY || pPair.blue.scale || 1.5;
+              applyPortalTransform(localPair.blue, pPair.blue.x, pPair.blue.y, pPair.blue.z, pPair.blue.nx, pPair.blue.ny, pPair.blue.nz, pPair.blue.wallIdx ?? -1, null, bx, by, pPair.blue.ux, pPair.blue.uy, pPair.blue.uz);
+            }
+            if (pPair.orange) {
+              const ox = pPair.orange.scaleX || pPair.orange.scale || 1.5;
+              const oy = pPair.orange.scaleY || pPair.orange.scale || 1.5;
+              applyPortalTransform(localPair.orange, pPair.orange.x, pPair.orange.y, pPair.orange.z, pPair.orange.nx, pPair.orange.ny, pPair.orange.nz, pPair.orange.wallIdx ?? -1, null, ox, oy, pPair.orange.ux, pPair.orange.uy, pPair.orange.uz);
+            }
+          }
+        }
+        break;
+      }
+      case 'placePortal': {
+        const owner = msg.ownerId || _uid;
+        const pair = getOrCreatePlayerPortalPair(owner);
+        const targetP = msg.isOrange ? pair.orange : pair.blue;
+        const sx = msg.scaleX || msg.scale || 1.5;
+        const sy = msg.scaleY || msg.scale || 1.5;
+        applyPortalTransform(targetP, msg.x, msg.y, msg.z, msg.nx, msg.ny, msg.nz, msg.wallIdx ?? -1, null, sx, sy, msg.ux, msg.uy, msg.uz);
+        break;
+      }
+      case 'portalScale': {
+        if (msg.scale && msg.ownerId) {
+          const pair = getOrCreatePlayerPortalPair(msg.ownerId);
+          [pair.blue, pair.orange].forEach((p) => {
+            p.scaleX = msg.scaleX || msg.scale;
+            p.scaleY = msg.scaleY || msg.scale;
+            p.scale = getPortalEffectiveScale(p);
+            p.group.scale.set(p.scaleX, p.scaleY, 1.0);
+            p.group.updateMatrixWorld();
+          });
+        }
+        break;
+      }
+      case 'teleportProp': {
+        const p = activeProps[msg.id];
+        if (p && p.body && !p.isStatic) {
+          p.body.wakeUp();
+          p.body.position.set(msg.x, msg.y, msg.z);
+          if (msg.scaleFactor !== undefined) applyPropScaleFactor(p, msg.scaleFactor);
+          if (msg.vx !== undefined) p.body.velocity.set(msg.vx, msg.vy, msg.vz);
+          if (msg.qx !== undefined) p.body.quaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
+          p.portalCd = 0.25;
+        }
+        break;
+      }
+      case 'teleportCar': {
+        const c = activeCars[msg.id];
+        if (c && c !== drivingCar) {
+          c.body.position.set(msg.x, msg.y, msg.z);
+          c.tp.set(msg.x, msg.y, msg.z);
+          if (msg.scaleFactor !== undefined) {
+            c.scaleFactor = msg.scaleFactor;
+            c.group.scale.set(c.scaleFactor, c.scaleFactor, c.scaleFactor);
+          }
+          if (msg.qx !== undefined) {
+            c.body.quaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
+            c.tq.set(msg.qx, msg.qy, msg.qz, msg.qw);
+          }
+          c.portalCd = 0.35;
+        }
+        break;
+      }
+      case 'playerUpdate': if (msg.id !== _uid) updateOrCreateRemotePlayer(msg); break;
+      case 'playerLeave':
+        removeRemotePlayer(msg.id);
+        removePlayerPortalPair(msg.id);
+        break;
+      case 'adminStatus':
+        _0xV.setAdm(!!msg.isAdmin);
+        syncAdminButtonVisibility();
+        if (_0xV.getAdm() && adminModal.style.display === 'block') renderAdminModal();
+        break;
+      case 'godMode': _0xV.setGod(!!msg.enabled); updateStatsUI(_0xV.getHp()); break;
+      case 'hpUpdate': updateStatsUI(msg.hp, msg.armor); break;
+      case 'teleport':
+        if (drivingCar) exitCar();
+        playerBody.position.set(msg.x, msg.y, msg.z); playerBody.velocity.set(0, 0, 0); break;
+      case 'playerHit':
+        if (msg.targetId === _uid && !_0xV.getGod()) {
+          if (msg.hp !== undefined) {
+            updateStatsUI(msg.hp, msg.armor !== undefined ? msg.armor : _0xV.getArm());
+          } else {
+            let dmg = msg.damage || 25;
+            let arm = _0xV.getArm();
+            if (arm > 0) { const abs = Math.min(arm, Math.ceil(dmg * 0.65)); arm -= abs; dmg -= abs; }
+            updateStatsUI(_0xV.getHp() - dmg, arm);
+          }
+          if (_0xV.getHp() <= 0) { if (drivingCar) exitCar(); triggerLocalShatter({ x: msg.dx || 0, y: msg.dy || 0, z: msg.dz || 0 }); }
+          else { playerBody.velocity.x += (msg.dx || 0) * 10; playerBody.velocity.y += 5; playerBody.velocity.z += (msg.dz || 0) * 10; }
+        }
+        break;
+      case 'spawnProp': spawnPropVisual(msg.id, msg); break;
+      case 'removeProp': removeProp(msg.id); break;
+      case 'clearProps': Object.keys(activeProps).forEach(removeProp); break;
+      case 'impulseProp': {
+        const p = activeProps[msg.id];
+        if (p && p.body && !p.isStatic) applyControlledPush(p.body, msg.fx || 0, msg.fy || 0, msg.fz || 0);
+        break;
+      }
+      case 'spawnCar':
+      case 'carUpdate': {
+        const car = createCarObject(msg.id, msg);
+        if (drivingCar === car) { if (msg.driverId && msg.driverId !== _uid) exitCar(); break; }
+        applyRemoteCarState(car, msg); break;
+      }
+      case 'chat': appendChatMessage(msg.uid, msg.color, msg.text); break;
+    }
+  }
+ 
+  function makeNameplateSprite() {
+    const canvas = _d.createElement('canvas'); canvas.width = 256; canvas.height = 64;
+    const tex = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    sprite.scale.set(2.4, 0.6, 1); sprite.position.y = 2.85;
+    return { sprite, canvas, ctx: canvas.getContext('2d'), tex };
+  }
+ 
+  function drawNameplate(np, id, hp, adminFlag) {
+    const ctx = np.ctx; ctx.clearRect(0, 0, 256, 64);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(18, 6, 220, 48);
+    ctx.font = 'bold 20px sans-serif'; ctx.fillStyle = adminFlag ? '#facc15' : '#ffffff';
+    ctx.textAlign = 'center'; ctx.fillText((adminFlag ? '👑 ' : '') + id.slice(0, 12), 128, 28);
+    ctx.fillStyle = '#334155'; ctx.fillRect(34, 36, 188, 12);
+    ctx.fillStyle = hp > 50 ? '#22c55e' : (hp > 25 ? '#f59e0b' : '#ef4444');
+    ctx.fillRect(34, 36, Math.max(0, Math.min(188, (hp / 100) * 188)), 12);
+    np.tex.needsUpdate = true;
+  }
+ 
+  // Uzak Oyuncular İçin Minecraft Bloklu Modeli
+  function createRemotePlayer(id, skinKey = 'steve') {
+    const group = new THREE.Group();
+    const rig = buildMinecraftHumanoid(defaultSteveCanvas); group.add(rig.root);
+    const np = makeNameplateSprite(); drawNameplate(np, id, 100, false); group.add(np.sprite);
+    const hitMesh = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.6, 1.3), new THREE.MeshBasicMaterial({ visible: false }));
+    hitMesh.position.y = 1.3; hitMesh.userData = { isPlayer: true, playerId: id }; group.add(hitMesh);
+    scene.add(group); intersectableObjects.push(hitMesh);
+    const kb = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, material: pm });
+    kb.addShape(new CANNON.Sphere(BASE_PLAYER_RADIUS)); kb.position.set(0, -500, 0); world.addBody(kb);
+    const marbleM = new THREE.Mesh(marbleGeo, makeMarbleMat('#00aaaa')); marbleM.castShadow = true; marbleM.visible = false; scene.add(marbleM);
+    const rpObj = {
+      id, body: kb, driving: false, group, rig, np, hitMesh, marbleMesh: marbleM,
+      mq: new THREE.Quaternion(), targetPos: new THREE.Vector3(0, 10, 0), prevPos: new THREE.Vector3(0, 10, 0),
+      targetRotY: 0, isShattered: false, skin: skinKey, hp: 100, isAdmin: false, remoteScale: 1.0,
+      holdingWeapon: 0, holdingItem: 'ramp', swingTimer: 0
+    };
+    if (skinKey && skinKey.startsWith('data:')) {
+      const im = new Image();
+      im.onload = () => {
+        const cvs = generateMinecraftSkinCanvas('custom', im);
+        if (rpObj.rig) group.remove(rpObj.rig.root);
+        rpObj.rig = buildMinecraftHumanoid(cvs);
+        rpObj.rig.root.scale.set(rpObj.remoteScale, rpObj.remoteScale, rpObj.remoteScale);
+        group.add(rpObj.rig.root);
+      };
+      im.src = skinKey;
+    } else if (skinKey && skinKey !== 'steve') {
+      const cvs = generateMinecraftSkinCanvas(skinKey);
+      if (rpObj.rig) group.remove(rpObj.rig.root);
+      rpObj.rig = buildMinecraftHumanoid(cvs);
+      group.add(rpObj.rig.root);
+    }
+    return rpObj;
+  }
+ 
+  function updateOrCreateRemotePlayer(d) {
+    if (!remotePlayers[d.id]) remotePlayers[d.id] = createRemotePlayer(d.id, d.skin || 'steve');
+    const rp = remotePlayers[d.id];
+    const newSkin = d.skin || 'steve';
+    if (newSkin !== rp.skin) {
+      rp.skin = newSkin;
+      if (newSkin.startsWith('data:')) {
+        const im = new Image();
+        im.onload = () => {
+          const cvs = generateMinecraftSkinCanvas('custom', im);
+          if (rp.rig) rp.group.remove(rp.rig.root);
+          rp.rig = buildMinecraftHumanoid(cvs);
+          rp.rig.root.scale.set(rp.remoteScale, rp.remoteScale, rp.remoteScale);
+          rp.group.add(rp.rig.root);
+        };
+        im.src = newSkin;
+      } else {
+        const cvs = generateMinecraftSkinCanvas(newSkin);
+        if (rp.rig) rp.group.remove(rp.rig.root);
+        rp.rig = buildMinecraftHumanoid(cvs);
+        rp.rig.root.scale.set(rp.remoteScale, rp.remoteScale, rp.remoteScale);
+        rp.group.add(rp.rig.root);
+      }
+    }
+    const newHp = d.hp !== undefined ? d.hp : 100;
+    const newAdm = !!d.isAdmin;
+    if (newHp !== rp.hp || newAdm !== rp.isAdmin) {
+      rp.hp = newHp; rp.isAdmin = newAdm; drawNameplate(rp.np, d.id, rp.hp, rp.isAdmin);
+      if (adminModal.style.display === 'block') renderAdminModal();
+    }
+    if (d.playerScale !== undefined && d.playerScale !== rp.remoteScale) {
+      rp.remoteScale = d.playerScale;
+      rp.rig.root.scale.set(d.playerScale, d.playerScale, d.playerScale);
+      rp.np.sprite.position.y = 2.85 * d.playerScale;
+    }
+    rp.targetPos.set(d.x, d.y - BASE_PLAYER_RADIUS * (rp.remoteScale || 1), d.z); rp.targetRotY = d.yaw || 0;
+    rp.isShattered = !!d.isShattered;
+    if (rp.isShattered && d.rag) updateRemoteRagdoll(rp, d.rag); else if (rp.rag) destroyRemoteRagdoll(rp);
+    const m = !!d.marble; rp.driving = !!d.driving;
+    if (d.mq) rp.mq.set(d.mq[0], d.mq[1], d.mq[2], d.mq[3]);
+    rp.rig.root.visible = !m;
+    const vis = !rp.isShattered && !d.driving;
+    rp.group.visible = rp.hitMesh.visible = vis; rp.marbleMesh.visible = vis && m;
+  }
+ 
+  function removeRemotePlayer(id) {
+    const rp = remotePlayers[id]; if (!rp) return;
+    if (rp.rag) destroyRemoteRagdoll(rp);
+    for (const cid in activeCars) if (activeCars[cid].driverId === id) activeCars[cid].driverId = null;
+    world.removeBody(rp.body); scene.remove(rp.group); scene.remove(rp.marbleMesh);
+    const i = intersectableObjects.indexOf(rp.hitMesh); if (i > -1) intersectableObjects.splice(i, 1);
+    delete remotePlayers[id]; if (adminModal.style.display === 'block') renderAdminModal();
+  }
+ 
+  function syncPlayerState(force, portalPass = false) {
+    if (!isPlaying || !isConnected) return;
+    const now = Date.now();
+    if (!force && now - lastSyncTime < 45) return;
+    lastSyncTime = now;
+    const pos = drivingCar ? drivingCar.body.position : (localRagdoll ? localRagdoll.torso.position : playerBody.position);
+    sendPacket({
+      type: 'playerUpdate', id: _uid, x: pos.x, y: pos.y, z: pos.z, yaw: yawObj.rotation.y,
+      color: myColor, skin: mySkin, hp: _0xV.getHp(), armor: _0xV.getArm(), playerScale: playerScale,
+      holdingWeapon: fingerModeIdx, holdingItem: selectedObj, isSwinging: (localArmSwing > 0.05),
+      isShattered: isShatteredLocal, driving: !!drivingCar, portalPass: !!portalPass,
+      rag: localRagdoll ? ragPose(localRagdoll) : undefined, marble: marbleMode,
+      mq: [playerBody.quaternion.x, playerBody.quaternion.y, playerBody.quaternion.z, playerBody.quaternion.w]
+    });
+    if (drivingCar) sendCarState(drivingCar);
+  }
+ 
+  const escapeHTML = (s) => String(s).replace(/[&<>'"]/g, (t) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t]));
+  function appendChatMessage(uid, color, text) {
+    const div = _d.createElement('div'); div.className = 'chat-msg';
+    div.innerHTML = `<span style="color:${isHex(color) ? color : '#facc15'};font-weight:bold">${escapeHTML(String(uid).substring(0, 14))}:</span> <span class="text-gray-200">${escapeHTML(text)}</span>`;
+    chatMessages.appendChild(div);
+    while (chatMessages.children.length > 25) chatMessages.removeChild(chatMessages.firstChild);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+  function sendChat() {
+    const text = chatInput.value.trim(); if (!text) return;
+    if (isConnected) sendPacket({ type: 'chat', uid: _uid, color: myColor, text }); else appendChatMessage(_uid, myColor, text);
+    chatInput.value = '';
+  }
+  chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChat(); });
+ 
+  const raycaster = new THREE.Raycaster();
+  const sparkGeo = new THREE.BoxGeometry(0.22, 0.22, 0.22), sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+  function createSpark(pos, colHex) {
+    const m = new THREE.Mesh(sparkGeo, colHex ? new THREE.MeshBasicMaterial({ color: colHex }) : sparkMat);
+    m.position.copy(pos); scene.add(m);
+    setTimeout(() => scene.remove(m), 150);
+  }
+ 
+  function fireRaycast() {
+    if (!isPlaying || isShatteredLocal) return;
+    triggerArmSwing();
+    const mode = FINGER_MODES[fingerModeIdx];
+    if (mode.cost > 0 && !_0xV.getAdm()) {
+      if (_0xV.getAmmo() < mode.cost) {
+        appendChatMessage('SİLAH', '#ef4444', '🔋 Merminiz (Ammo) bitti! Haritadaki sarı mermi kutularını toplayın.');
+        return;
+      }
+      updateStatsUI(undefined, undefined, _0xV.getAmmo() - mode.cost);
+    }
+ 
+    fingerRecoil = 1.0;
+    flashLight.color.setHex(mode.color); flashLight.intensity = 2.5;
+    setTimeout(() => (flashLight.intensity = 0), 55);
+ 
+    if (mode.id === 'portal') { placePortal(false); return; }
+ 
+    const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
+    const startBeam = fingerTipLocalPos.clone(); fingerGunGroup.localToWorld(startBeam);
+ 
+    if (mode.id === 'gravity' && grabbedProp) {
+      const p = grabbedProp;
+      grabbedProp = null;
+      if (p && p.body && !p.isStatic) {
+        const fx = aim.x * 46, fy = aim.y * 46 + 8, fz = aim.z * 46;
+        applyControlledPush(p.body, fx, fy, fz);
+        if (isConnected) sendPacket({ type: 'impulseProp', id: p.id, fx, fy, fz });
+      }
+      spawnLaserBeam(startBeam, playerObj.position.clone().addScaledVector(aim, 25), mode.color);
+      return;
+    }
+ 
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = raycaster.intersectObjects(intersectableObjects, true).find((x) => !(x.object.userData.isPlayer && !x.object.visible) && x.object !== ghostMesh);
+    const endBeam = hit ? hit.point.clone() : playerObj.position.clone().addScaledVector(aim, 60);
+    spawnLaserBeam(startBeam, endBeam, mode.color);
+ 
+    if (mode.id === 'spawn') {
+      const spawnPos = hit ? hit.point.clone().add(new THREE.Vector3(0, 1.4, 0)) : playerObj.position.clone().addScaledVector(aim, 8);
+      const spawned = spawnRandomItem({ x: spawnPos.x, y: spawnPos.y, z: spawnPos.z, q: new THREE.Quaternion() });
+      if (spawned && spawned.body) spawned.body.velocity.set(aim.x * 20, aim.y * 20 + 4, aim.z * 20);
+      return;
+    }
+ 
+    if (!hit) return;
+    let obj = hit.object; while (obj.parent && !obj.userData.isProp && !obj.userData.isCar && !obj.userData.isPlayer) obj = obj.parent;
+    const point = hit.point; createSpark(point, mode.color);
+ 
+    if (mode.id === 'gravity' && obj.userData && obj.userData.isProp) {
+      const p = activeProps[obj.userData.id];
+      if (p && !p.isStatic) { grabbedProp = p; grabDistance = Math.max(3.5, Math.min(14, hit.distance)); return; }
+    }
+ 
+    if (obj.userData && obj.userData.isProp) {
+      const f = mode.force;
+      const pk = { type: 'impulseProp', id: obj.userData.id, fx: aim.x * f, fy: aim.y * f + (mode.id === 'force' ? 8 : 3), fz: aim.z * f };
+      const p = activeProps[obj.userData.id];
+      if (p && p.body && !p.isStatic) applyControlledPush(p.body, pk.fx, pk.fy, pk.fz);
+      if (isConnected) sendPacket(pk);
+    } else if (obj.userData && obj.userData.isPlayer) {
+      const mult = mode.id === 'force' ? 2.2 : 1;
+      sendPacket({ type: 'playerHit', targetId: obj.userData.playerId, damage: mode.dmg, dx: aim.x * mult, dy: aim.y * mult, dz: aim.z * mult });
+    }
+  }
+ 
+  function triggerSecondaryAction() {
+    if (!isPlaying || isShatteredLocal) return;
+    triggerArmSwing();
+    if (FINGER_MODES[fingerModeIdx].id === 'portal') placePortal(true);
+    else if (FINGER_MODES[fingerModeIdx].id === 'gravity' && grabbedProp) grabbedProp = null;
+    else spawnObject(selectedObj);
+  }
+ 
+  const _rq1 = new THREE.Quaternion();
+  const RAG_UV = { head: [0, 0, 8, 8, 8], torso: [16, 16, 8, 12, 4], armL: [32, 48, 4, 12, 4], armR: [40, 16, 4, 12, 4], legL: [16, 48, 4, 12, 4], legR: [0, 16, 4, 12, 4] };
+  function updateRemoteRagdoll(rp, pose) {
+    if (!rp.rag) {
+      const tex = new THREE.CanvasTexture(rp.rig.skinCanvas); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestMipmapNearestFilter;
+      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05, alphaTest: 0.05 });
+      const sc = rp.remoteScale || 1;
+      const parts = Object.keys(RAG_DEFS).map((k) => {
+        const sz = RAG_DEFS[k][0], geo = new THREE.BoxGeometry(sz[0] * sc, sz[1] * sc, sz[2] * sc);
+        applyMinecraftBoxUV(geo, ...RAG_UV[k]);
+        const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; scene.add(mesh);
+        return { mesh, first: true };
+      });
+      rp.rag = { parts, mat, tex, pose };
+    }
+    rp.rag.pose = pose;
+  }
+  function stepRemoteRagdoll(rp) {
+    rp.rag.parts.forEach((p, i) => {
+      const a = rp.rag.pose[i]; if (!a || a.length < 7) return;
+      if (p.first) { p.mesh.position.set(a[0], a[1], a[2]); p.mesh.quaternion.set(a[3], a[4], a[5], a[6]); p.first = false; }
+      else {
+        p.mesh.position.x += (a[0] - p.mesh.position.x) * 0.4; p.mesh.position.y += (a[1] - p.mesh.position.y) * 0.4; p.mesh.position.z += (a[2] - p.mesh.position.z) * 0.4;
+        p.mesh.quaternion.slerp(_rq1.set(a[3], a[4], a[5], a[6]), 0.4);
+      }
+    });
+  }
+  function destroyRemoteRagdoll(rp) {
+    rp.rag.parts.forEach((p) => { scene.remove(p.mesh); p.mesh.geometry.dispose(); });
+    rp.rag.mat.dispose(); rp.rag.tex.dispose(); rp.rag = null;
+  }
+ 
+  const ragdolls = [];
+  function spawnRagdoll(base, yaw, color, dir, life, extra) {
+    const skinCvs = getActiveLocalSkinCanvas();
+    const ragTex = new THREE.CanvasTexture(skinCvs);
+    ragTex.magFilter = THREE.NearestFilter;
+    ragTex.minFilter = THREE.NearestMipmapNearestFilter;
+    const mat = new THREE.MeshStandardMaterial({ map: ragTex, roughness: 0.85, metalness: 0.05, alphaTest: 0.05 });
+    const sy = Math.sin(yaw), cy = Math.cos(yaw);
+    const P = {}, parts = [];
+    for (const k in RAG_DEFS) {
+      const [sz, o, m] = RAG_DEFS[k];
+      const partMat = mat.clone();
+      const meshGeo = new THREE.BoxGeometry(sz[0] * playerScale, sz[1] * playerScale, sz[2] * playerScale);
+      const cloneGeo = new THREE.BoxGeometry(sz[0] * playerScale, sz[1] * playerScale, sz[2] * playerScale);
+      if (k === 'head') { applyMinecraftBoxUV(meshGeo, 0, 0, 8, 8, 8); applyMinecraftBoxUV(cloneGeo, 0, 0, 8, 8, 8); }
+      else if (k === 'torso') { applyMinecraftBoxUV(meshGeo, 16, 16, 8, 12, 4); applyMinecraftBoxUV(cloneGeo, 16, 16, 8, 12, 4); }
+      else if (k === 'armL') { applyMinecraftBoxUV(meshGeo, 32, 48, 4, 12, 4); applyMinecraftBoxUV(cloneGeo, 32, 48, 4, 12, 4); }
+      else if (k === 'armR') { applyMinecraftBoxUV(meshGeo, 40, 16, 4, 12, 4); applyMinecraftBoxUV(cloneGeo, 40, 16, 4, 12, 4); }
+      else if (k === 'legL') { applyMinecraftBoxUV(meshGeo, 16, 48, 4, 12, 4); applyMinecraftBoxUV(cloneGeo, 16, 48, 4, 12, 4); }
+      else if (k === 'legR') { applyMinecraftBoxUV(meshGeo, 0, 16, 4, 12, 4); applyMinecraftBoxUV(cloneGeo, 0, 16, 4, 12, 4); }
+      const mesh = new THREE.Mesh(meshGeo, partMat);
+      const cloneMesh = new THREE.Mesh(cloneGeo, partMat.clone());
+      cloneMesh.visible = false;
+      scene.add(mesh, cloneMesh);
+      const body = new CANNON.Body({ mass: m, material: pm, linearDamping: 0.15, angularDamping: 0.5, allowSleep: false });
+      body.addShape(new CANNON.Box(new CANNON.Vec3((sz[0] * playerScale) / 2, (sz[1] * playerScale) / 2, (sz[2] * playerScale) / 2)));
+      body.position.set(base.x + (o[0] * cy + o[2] * sy) * playerScale, base.y + o[1] * playerScale, base.z + (-o[0] * sy + o[2] * cy) * playerScale);
+      body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yaw); // karakterin baktığı yönde başlasın
+      body.velocity.set(dir.x * 14 + (extra ? extra.x : 0), dir.y * 6 + 4 + (extra ? extra.y : 0), dir.z * 14 + (extra ? extra.z : 0));
+      world.addBody(body); P[k] = body; parts.push({ mesh, cloneMesh, body });
+    }
+    const V = (a, b, c) => new CANNON.Vec3(a * playerScale, b * playerScale, c * playerScale);
+    const cons = [
+      new CANNON.PointToPointConstraint(P.torso, V(0, 0.4, 0), P.head, V(0, -0.26, 0)),
+      new CANNON.PointToPointConstraint(P.torso, V(-0.4, 0.35, 0), P.armL, V(0, 0.35, 0)),
+      new CANNON.PointToPointConstraint(P.torso, V(0.4, 0.35, 0), P.armR, V(0, 0.35, 0)),
+      new CANNON.PointToPointConstraint(P.torso, V(-0.15, -0.4, 0), P.legL, V(0, 0.35, 0)),
+      new CANNON.PointToPointConstraint(P.torso, V(0.15, -0.4, 0), P.legR, V(0, 0.35, 0))
+    ];
+    cons.forEach((c) => { c.collideConnected = false; world.addConstraint(c); });
+    const r = { parts, cons, mat, torso: P.torso, life, portalCd: 0 }; ragdolls.push(r); return r;
+  }
+  function removeRagdoll(r) {
+    const i = ragdolls.indexOf(r); if (i > -1) ragdolls.splice(i, 1);
+    r.cons.forEach((c) => world.removeConstraint(c));
+    r.parts.forEach((p) => {
+      scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose();
+      if (p.cloneMesh) { scene.remove(p.cloneMesh); p.cloneMesh.geometry.dispose(); p.cloneMesh.material.dispose(); }
+      world.removeBody(p.body);
+    });
+    r.mat.dispose();
+  }
+  function startLocalRagdoll(dir, extra, autoRespawn) {
+    if (isShatteredLocal || !isPlaying) return;
+    isShatteredLocal = true; ragdollStart = Date.now();
+    const p = playerBody.position;
+    localRagdoll = spawnRagdoll({ x: p.x, y: p.y - playerRadius, z: p.z }, yawObj.rotation.y, myColor, dir, Infinity, extra);
+    if (world.bodies.includes(playerBody)) world.removeBody(playerBody);
+    camera.position.set(0, 1.5 * playerScale, 5.5 * playerScale);
+    pitchObj.position.set(0, 0.5 * playerScale, 0);
+    syncPlayerState(true);
+    if (autoRespawn) ragdollTimer = setTimeout(() => endLocalRagdoll(true), 4000);
+  }
+ 
+  function endLocalRagdoll(atSpawn) {
+    if (!isShatteredLocal) return;
+    clearTimeout(ragdollTimer);
+    const t = localRagdoll && localRagdoll.torso ? localRagdoll.torso.position : null;
+    const tx = t ? t.x : 0, ty = t ? t.y : 15, tz = t ? t.z : 8;
+    if (localRagdoll) { removeRagdoll(localRagdoll); localRagdoll = null; }
+    isShatteredLocal = false;
+ 
+    if (atSpawn || !t) {
+      setPlayerScaleFactor(1.0);
+      playerBody.position.set(0, 15, 8);
+      updateStatsUI(100, 50, 100);
+      if (isConnected) sendPacket({ type: 'healSelf', amount: 100 });
+    } else {
+      playerBody.position.set(tx, Math.max(1.5, ty + 1.2 * playerScale), tz);
+    }
+    playerBody.velocity.set(0, 0, 0);
+    playerBody.angularVelocity.set(0, 0, 0);
+ 
+    if (!world.bodies.includes(playerBody)) {
+      world.addBody(playerBody);
+    }
+    playerBody.wakeUp();
+ 
+    playerObj.position.copy(playerBody.position);
+    applyCameraRig();
+    syncPlayerState(true);
+ 
+    if (!mobileMode && innerWidth > 768 && isPlaying) {
+      _d.body.requestPointerLock();
+    }
+  }
+  function toggleRagdoll() {
+    if (!isPlaying || drivingCar) return;
+    if (isShatteredLocal) { if (Date.now() - ragdollStart > 700) endLocalRagdoll(false); }
+    else { const v = playerBody.velocity; startLocalRagdoll({ x: 0, y: 0, z: 0 }, { x: v.x, y: v.y, z: v.z }, false); }
+  }
+  function triggerLocalShatter(dir) { if (!ragdollEnabled) return; startLocalRagdoll(dir || { x: 0, y: 0, z: 0 }, null, true); }
+  $('ragdollBtn').addEventListener('click', (e) => { e.currentTarget.blur(); toggleRagdoll(); });
+ 
+  const activeActions = { forward: false, backward: false, left: false, right: false, jump: false };
+  let mouseLocked = false;
+  _d.addEventListener('mousemove', (e) => {
+    if (!mouseLocked || !isPlaying) return;
+    yawObj.rotation.y -= (e.movementX || 0) * 0.002 * lookSensitivity;
+    pitchObj.rotation.x += (e.movementY || 0) * 0.002 * lookSensitivity * (invertY ? 1 : -1);
+    pitchObj.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObj.rotation.x));
+  });
+  _d.addEventListener('wheel', (e) => {
+    if (grabbedProp) {
+      grabDistance = Math.max(2.2, Math.min(18, grabDistance - Math.sign(e.deltaY) * 0.9));
+    } else if (FINGER_MODES[fingerModeIdx].id === 'portal') {
+      const delta = -Math.sign(e.deltaY) * 0.15;
+      if (e.shiftKey) {
+        orangeScaleX = Math.max(0.4, Math.min(5.0, orangeScaleX + delta));
+        orangeScaleY = Math.max(0.4, Math.min(5.0, orangeScaleY + delta));
+      } else {
+        blueScaleX = Math.max(0.4, Math.min(5.0, blueScaleX + delta));
+        blueScaleY = Math.max(0.4, Math.min(5.0, blueScaleY + delta));
+      }
+      syncMyPortalDimensions(true);
+    }
+  });
+  _d.addEventListener('mousedown', (e) => {
+    if (!isPlaying || isShatteredLocal || mobileMode || settingsModal.style.display === 'block' || keybindsModal.style.display === 'block' || adminModal.style.display === 'block' || portalConfigModal.style.display === 'block' || buildMenu.style.display === 'block' || e.target.closest('.ui-btn,#vehiclePrompt,#chatContainer,#mobileControls,#buildMenu,#keybindsModal,#adminModal,#portalConfigModal,#scaleBadge')) return;
+    if (!mouseLocked) _d.body.requestPointerLock();
+    else if (e.button === 0) fireRaycast();
+    else if (e.button === 2) triggerSecondaryAction();
+  });
+  _d.addEventListener('pointerlockchange', () => (mouseLocked = _d.pointerLockElement === _d.body));
+ 
+  const normalizeKeyName = (e) => e.code === 'Space' ? 'space' : e.key.toLowerCase();
+ 
+  _w.addEventListener('keydown', (e) => {
+    if (listeningKeyAction) {
+      e.preventDefault(); const kn = normalizeKeyName(e);
+      if (kn !== 'escape' && kn !== 'enter') { keybinds[listeningKeyAction] = kn; saveKeybinds(); }
+      listeningKeyAction = null; renderKeybindsModal(); return;
+    }
+    if (!isPlaying) return;
+    if (e.key === 'Enter') {
+      if (_d.activeElement === chatInput) { sendChat(); chatInput.blur(); if (!mobileMode && innerWidth > 768 && settingsModal.style.display !== 'block' && adminModal.style.display !== 'block' && portalConfigModal.style.display !== 'block') _d.body.requestPointerLock(); }
+      else { if (mouseLocked) _d.exitPointerLock(); chatInput.focus(); } return;
+    }
+    if (['chatInput', 'admAnnounceInput', 'startAdminPassInput'].includes(_d.activeElement?.id)) return;
+ 
+    const k = normalizeKeyName(e);
+    if (k === keybinds.interactCar) return handleInteractKey();
+    if (k === keybinds.fullscreen) return toggleFullscreen();
+    if (k === keybinds.ragdoll) return toggleRagdoll();
+    if (k === keybinds.marble) return toggleMarble();
+    if (k === keybinds.camView) return toggleCameraView();
+    if (k === keybinds.adminMenu) return toggleAdminModal();
+    if (k === keybinds.buildMenu) return toggleBuildMenu();
+    if (k === keybinds.quickSpawn) return triggerSecondaryAction();
+    if (k === keybinds.randomSpawn) return spawnRandomItem();
+    if (k === keybinds.fingerMode) return cycleFingerMode();
+    if (k === keybinds.rotateObj) return rotateSelectedObject();
+    if (k === keybinds.deleteObj) return deleteAimed();
+    if (k === keybinds.keybinds) return toggleKeybindsModal();
+ 
+    if (k === keybinds.forward) activeActions.forward = true;
+    if (k === keybinds.backward) activeActions.backward = true;
+    if (k === keybinds.left) activeActions.left = true;
+    if (k === keybinds.right) activeActions.right = true;
+    if (k === keybinds.jump) { activeActions.jump = true; tryJump(); }
+  });
+ 
+  _w.addEventListener('keyup', (e) => {
+    const k = normalizeKeyName(e);
+    if (k === keybinds.forward) activeActions.forward = false;
+    if (k === keybinds.backward) activeActions.backward = false;
+    if (k === keybinds.left) activeActions.left = false;
+    if (k === keybinds.right) activeActions.right = false;
+    if (k === keybinds.jump) activeActions.jump = false;
+  });
+ 
+  // MOBİL DOKUNMATİK KONTROLLER
+  let joyMove = { x: 0, y: 0 };
+  const leftZone = $('joyLeft'), leftKnob = $('knobLeft');
+  let leftTouchId = null, leftMouseActive = false, leftCenter = { x: 0, y: 0 };
+ 
+  function updateJoystickFromPoint(clientX, clientY) {
+    let dx = clientX - leftCenter.x, dy = clientY - leftCenter.y;
+    const dist = Math.hypot(dx, dy), r = 38;
+    if (dist > r) { dx *= r / dist; dy *= r / dist; }
+    leftKnob.style.transform = `translate(${dx}px,${dy}px)`;
+    joyMove.x = dx / r; joyMove.y = dy / r;
+  }
+ 
+  leftZone.addEventListener('touchstart', (e) => {
+    if (leftTouchId !== null) return; e.preventDefault();
+    const t = e.changedTouches[0]; leftTouchId = t.identifier;
+    const r = leftZone.getBoundingClientRect(); leftCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    updateJoystickFromPoint(t.clientX, t.clientY);
+  }, { passive: false });
+  leftZone.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === leftTouchId) updateJoystickFromPoint(t.clientX, t.clientY);
+  }, { passive: false });
+  const resetJoy = (e) => {
+    for (const t of e.changedTouches) if (t.identifier === leftTouchId) {
+      leftTouchId = null; leftKnob.style.transform = ''; joyMove = { x: 0, y: 0 };
+    }
+  };
+  leftZone.addEventListener('touchend', resetJoy); leftZone.addEventListener('touchcancel', resetJoy);
+ 
+  leftZone.addEventListener('mousedown', (e) => {
+    e.preventDefault(); leftMouseActive = true;
+    const r = leftZone.getBoundingClientRect(); leftCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    updateJoystickFromPoint(e.clientX, e.clientY);
+  });
+ 
+  const rz = $('rightTouchZone');
+  let lookId = null, rightMouseLook = false, lastX = 0, lastY = 0;
+  rz.addEventListener('touchstart', (e) => {
+    if (!isPlaying || isShatteredLocal || settingsModal.style.display === 'block') return; e.preventDefault();
+    for (const t of e.changedTouches) if (lookId === null) { lookId = t.identifier; lastX = t.clientX; lastY = t.clientY; break; }
+  }, { passive: false });
+  rz.addEventListener('touchmove', (e) => {
+    if (!isPlaying || isShatteredLocal) return; e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === lookId) {
+      yawObj.rotation.y -= (t.clientX - lastX) * 0.005 * lookSensitivity;
+      pitchObj.rotation.x += (t.clientY - lastY) * 0.005 * lookSensitivity * (invertY ? 1 : -1);
+      pitchObj.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObj.rotation.x));
+      lastX = t.clientX; lastY = t.clientY;
+    }
+  }, { passive: false });
+  const endLook = (e) => { for (const t of e.changedTouches) if (t.identifier === lookId) lookId = null; };
+  rz.addEventListener('touchend', endLook); rz.addEventListener('touchcancel', endLook);
+ 
+  rz.addEventListener('mousedown', (e) => {
+    if (!isPlaying || isShatteredLocal) return;
+    e.preventDefault(); rightMouseLook = true; lastX = e.clientX; lastY = e.clientY;
+  });
+  _w.addEventListener('mousemove', (e) => {
+    if (leftMouseActive) updateJoystickFromPoint(e.clientX, e.clientY);
+    if (rightMouseLook && isPlaying && !isShatteredLocal) {
+      yawObj.rotation.y -= (e.clientX - lastX) * 0.005 * lookSensitivity;
+      pitchObj.rotation.x += (e.clientY - lastY) * 0.005 * lookSensitivity * (invertY ? 1 : -1);
+      pitchObj.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObj.rotation.x));
+      lastX = e.clientX; lastY = e.clientY;
+    }
+  });
+  _w.addEventListener('mouseup', () => {
+    if (leftMouseActive) { leftMouseActive = false; leftKnob.style.transform = ''; joyMove = { x: 0, y: 0 }; }
+    rightMouseLook = false;
+  });
+ 
+  function bindMobileActionBtn(id, fn) {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false });
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
+  }
+  bindMobileActionBtn('jumpBtnMobile', tryJump);
+  bindMobileActionBtn('shootBtnMobile', fireRaycast);
+  bindMobileActionBtn('altShootBtnMobile', triggerSecondaryAction);
+  bindMobileActionBtn('carBtnMobile', handleInteractKey);
+  bindMobileActionBtn('ragBtnMobile', toggleRagdoll);
+  bindMobileActionBtn('weaponSwitchMobile', cycleFingerMode);
+  bindMobileActionBtn('portalSizeMobile', togglePortalConfigModal);
+  bindMobileActionBtn('spawnBtnMobile', () => spawnObject(selectedObj));
+ 
+  _w.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+ 
+  const clock = new THREE.Clock();
+  let frames = 0, fpsTimer = 0;
+ 
+  function isInsidePortalAperture(pt, portal, radiusPad = 0.75) {
+    if (!portal || !portal.active) return false;
+    const sx = portal.scaleX || portal.scale || 1.5;
+    const sy = portal.scaleY || portal.scale || 1.5;
+    const maxS = Math.max(sx, sy);
+    const rel = pt.clone().sub(portal.pos);
+    const normalDist = Math.abs(rel.dot(portal.normal));
+    if (normalDist >= 1.55 * maxS + radiusPad) return false;
+ 
+    const localPt = rel.clone().applyQuaternion(portal.group.quaternion.clone().invert());
+    const rx = 1.45 * sx + radiusPad * 0.5;
+    const ry = 2.05 * sy + radiusPad * 0.5;
+    const normEllipse = (localPt.x * localPt.x) / (rx * rx) + (localPt.y * localPt.y) / (ry * ry);
+    return normEllipse <= 1.0;
+  }
+ 
+  function seamlessTeleportPlayer(srcPortal, dstPortal) {
+    const scaleRatio = getPortalEffectiveScale(dstPortal) / getPortalEffectiveScale(srcPortal);
+    setPlayerScaleFactor(playerScale * scaleRatio);
+
+    const curPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+    const newPos = transformPointBetweenPortals(curPos, srcPortal, dstPortal);
+
+    const isDstFloor = dstPortal.normal.y > 0.6;
+    const isDstCeil = dstPortal.normal.y < -0.6;
+    const isDstWall = Math.abs(dstPortal.normal.y) <= 0.6;
+
+    if (isDstFloor) {
+      newPos.y = Math.max(newPos.y, dstPortal.pos.y + playerRadius + 0.18);
+    } else if (isDstCeil) {
+      newPos.y = Math.min(newPos.y, dstPortal.pos.y - playerRadius - 0.18);
+    } else {
+      const relFromDst = newPos.clone().sub(dstPortal.pos);
+      const nDist = relFromDst.dot(dstPortal.normal);
+      const minClearance = Math.max(0.75, playerRadius * 1.05);
+      if (nDist < minClearance) newPos.addScaledVector(dstPortal.normal, minClearance - nDist);
+      newPos.y = Math.max(playerRadius + 0.08, newPos.y);
+    }
+
+    playerBody.position.set(newPos.x, newPos.y, newPos.z);
+    playerObj.position.copy(playerBody.position);
+
+    const curVel = new THREE.Vector3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
+    const curSpd = curVel.length();
+    const outVel = transformVecBetweenPortals(curVel, srcPortal, dstPortal).multiplyScalar(Math.max(0.75, Math.min(1.8, scaleRatio)));
+
+    if (isDstFloor) {
+      const launchUp = Math.max(9, curSpd * 0.85);
+      outVel.y = Math.max(outVel.y, launchUp);
+    } else if (isDstWall) {
+      const minOutSpd = Math.max(8, curSpd);
+      const normSpd = outVel.dot(dstPortal.normal);
+      if (normSpd < 6) outVel.addScaledVector(dstPortal.normal, Math.max(6, minOutSpd * 0.65) - normSpd);
+    }
+    playerBody.velocity.set(outVel.x, outVel.y, outVel.z);
+
+    const exitYaw = getPortalExitYaw(srcPortal, dstPortal, yawObj.rotation.y);
+    yawObj.rotation.y = exitYaw;
+
+    portalCooldown = 0.25;
+    syncPlayerState(true, true);
+  }
+ 
+  function seamlessTeleportProp(p, srcPortal, dstPortal) {
+    if (grabbedProp === p) grabbedProp = null;
+    const scaleRatio = getPortalEffectiveScale(dstPortal) / getPortalEffectiveScale(srcPortal);
+    applyPropScaleFactor(p, (p.scaleFactor || 1.0) * scaleRatio);
+
+    const b = p.body;
+    const curPos = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
+    const outPos = transformPointBetweenPortals(curPos, srcPortal, dstPortal);
+
+    const isDstFloor = dstPortal.normal.y > 0.6;
+    if (isDstFloor) {
+      outPos.y = Math.max(outPos.y, dstPortal.pos.y + p.boundR + 0.15);
+    } else {
+      const relFromDst = outPos.clone().sub(dstPortal.pos);
+      const nDist = relFromDst.dot(dstPortal.normal);
+      const minClearance = p.boundR + 0.45;
+      if (nDist < minClearance) outPos.addScaledVector(dstPortal.normal, minClearance - nDist);
+      outPos.y = Math.max(p.boundR + 0.05, outPos.y);
+    }
+
+    const inVel = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z);
+    const outVel = transformVecBetweenPortals(inVel, srcPortal, dstPortal);
+    if (isDstFloor) {
+      outVel.y = Math.max(outVel.y, 8);
+    } else if (outVel.dot(dstPortal.normal) < 6) {
+      outVel.addScaledVector(dstPortal.normal, 7);
+    }
+
+    const curQ = new THREE.Quaternion(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+    const outQ = transformQuatBetweenPortals(curQ, srcPortal, dstPortal);
+
+    b.wakeUp();
+    b.position.set(outPos.x, outPos.y, outPos.z);
+    b.velocity.set(outVel.x, outVel.y, outVel.z);
+    b.quaternion.set(outQ.x, outQ.y, outQ.z, outQ.w);
+    p.mesh.position.copy(b.position);
+    p.mesh.quaternion.copy(b.quaternion);
+    p.portalCd = 0.28;
+
+    if (isConnected) {
+      sendPacket({
+        type: 'teleportProp',
+        id: p.id,
+        x: outPos.x, y: outPos.y, z: outPos.z,
+        scaleFactor: p.scaleFactor || 1.0,
+        vx: outVel.x, vy: outVel.y, vz: outVel.z,
+        qx: outQ.x, qy: outQ.y, qz: outQ.z, qw: outQ.w
+      });
+    }
+  }
+ 
+  function seamlessTeleportCar(car, srcPortal, dstPortal) {
+    const scaleRatio = getPortalEffectiveScale(dstPortal) / getPortalEffectiveScale(srcPortal);
+    car.scaleFactor = Math.max(0.4, Math.min(3.0, (car.scaleFactor || 1.0) * scaleRatio));
+    car.group.scale.set(car.scaleFactor, car.scaleFactor, car.scaleFactor);
+    car.portalClone.scale.set(car.scaleFactor, car.scaleFactor, car.scaleFactor);
+
+    const b = car.body;
+    const curPos = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
+    const outPos = transformPointBetweenPortals(curPos, srcPortal, dstPortal);
+
+    const isDstFloor = dstPortal.normal.y > 0.6;
+    if (isDstFloor) {
+      outPos.y = Math.max(outPos.y, dstPortal.pos.y + CAR_Y * car.scaleFactor + 0.25);
+    } else {
+      const relFromDst = outPos.clone().sub(dstPortal.pos);
+      const nDist = relFromDst.dot(dstPortal.normal);
+      const pad = 2.8 * car.scaleFactor;
+      if (nDist < pad) outPos.addScaledVector(dstPortal.normal, pad - nDist);
+      outPos.y = Math.max(CAR_Y * car.scaleFactor, outPos.y);
+    }
+
+    const inVel = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z);
+    const outVel = transformVecBetweenPortals(inVel, srcPortal, dstPortal);
+    if (isDstFloor) {
+      outVel.y = Math.max(outVel.y, 8);
+    } else if (outVel.dot(dstPortal.normal) < 8) {
+      outVel.addScaledVector(dstPortal.normal, 10);
+    }
+
+    const curQ = new THREE.Quaternion(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+    const outQ = transformQuatBetweenPortals(curQ, srcPortal, dstPortal);
+
+    b.wakeUp();
+    b.position.set(outPos.x, outPos.y, outPos.z);
+    b.velocity.set(outVel.x, outVel.y, outVel.z);
+    b.angularVelocity.set(0, 0, 0);
+    b.quaternion.set(outQ.x, outQ.y, outQ.z, outQ.w);
+    car.group.position.copy(b.position);
+    car.group.quaternion.copy(b.quaternion);
+    car.tp.copy(b.position);
+    car.tq.copy(outQ);
+    car.portalCd = 0.45;
+
+    if (drivingCar === car) {
+      setPlayerScaleFactor(playerScale * scaleRatio);
+      pitchObj.position.set(0, 2.5 * car.scaleFactor, 2.2 * car.scaleFactor);
+      yawObj.rotation.y = getPortalExitYaw(srcPortal, dstPortal, yawObj.rotation.y);
+      sendCarState(car);
+      syncPlayerState(true, true);
+    } else if (isConnected) {
+      sendPacket({
+        type: 'teleportCar',
+        id: car.id,
+        x: b.position.x, y: b.position.y, z: b.position.z,
+        scaleFactor: car.scaleFactor || 1.0,
+        vx: outVel.x, vy: outVel.y, vz: outVel.z,
+        qx: outQ.x, qy: outQ.y, qz: outQ.z, qw: outQ.w
+      });
+    }
+  }
+ 
+  function seamlessTeleportRagdoll(rag, srcPortal, dstPortal) {
+    const scaleRatio = getPortalEffectiveScale(dstPortal) / getPortalEffectiveScale(srcPortal);
+    if (rag === localRagdoll) setPlayerScaleFactor(playerScale * scaleRatio);
+    const torsoPos = new THREE.Vector3(rag.torso.position.x, rag.torso.position.y, rag.torso.position.z);
+    const outTorsoPos = transformPointBetweenPortals(torsoPos, srcPortal, dstPortal);
+    const relFromDst = outTorsoPos.clone().sub(dstPortal.pos);
+    const nDist = relFromDst.dot(dstPortal.normal);
+    if (nDist < 1.1) outTorsoPos.addScaledVector(dstPortal.normal, 1.1 - nDist);
+ 
+    rag.parts.forEach((p) => {
+      p.mesh.scale.multiplyScalar(scaleRatio);
+      if (p.cloneMesh) p.cloneMesh.scale.copy(p.mesh.scale);
+      const partOffset = new THREE.Vector3(
+        (p.body.position.x - torsoPos.x) * scaleRatio,
+        (p.body.position.y - torsoPos.y) * scaleRatio,
+        (p.body.position.z - torsoPos.z) * scaleRatio
+      );
+      const rotOffset = transformVecBetweenPortals(partOffset, srcPortal, dstPortal);
+      p.body.position.set(outTorsoPos.x + rotOffset.x, outTorsoPos.y + rotOffset.y, outTorsoPos.z + rotOffset.z);
+ 
+      const inVel = new THREE.Vector3(p.body.velocity.x, p.body.velocity.y, p.body.velocity.z);
+      const outVel = transformVecBetweenPortals(inVel, srcPortal, dstPortal);
+      if (outVel.dot(dstPortal.normal) < 6) outVel.addScaledVector(dstPortal.normal, 8);
+      p.body.velocity.set(outVel.x, outVel.y, outVel.z);
+ 
+      const curQ = new THREE.Quaternion(p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.w, p.body.quaternion.z);
+      const outQ = transformQuatBetweenPortals(curQ, srcPortal, dstPortal);
+      p.body.quaternion.set(outQ.x, outQ.y, outQ.z, outQ.w);
+      p.mesh.position.copy(p.body.position);
+      p.mesh.quaternion.copy(p.body.quaternion);
+    });
+ 
+    rag.portalCd = 0.38;
+    if (rag === localRagdoll) syncPlayerState(true, true);
+  }
+ 
+  function animate() {
+    requestAnimationFrame(animate);
+    const raw = clock.getDelta(), dt = Math.min(raw, 0.05);
+    frames++; fpsTimer += raw;
+    if (fpsTimer >= 0.5) { $('fpsCounter').innerText = Math.round(frames / fpsTimer) + ' FPS'; frames = 0; fpsTimer = 0; }
+    if (jumpCooldown > 0) jumpCooldown -= dt;
+    if (portalCooldown > 0) portalCooldown -= dt;
+ 
+    mapStatues.forEach((st) => { st.rig.root.rotation.y += dt * 0.9; });
+ 
+    worldPickups.forEach((pk) => {
+      if (!pk.active) return;
+      pk.model.rotation.y += dt * 1.6;
+      pk.model.position.y = pk.y + 1.15 + Math.sin(clock.elapsedTime * 2.8) * 0.16;
+      if (isPlaying && !isShatteredLocal && playerBody.position.distanceTo(pk.model.position) < 2.3 * Math.max(1, playerScale)) collectPickupItem(pk);
+    });
+ 
+    if (grabbedProp && grabbedProp.body && !grabbedProp.isStatic) {
+      const aim = new THREE.Vector3(); camera.getWorldDirection(aim);
+      const holdPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y + 0.9 * playerScale, playerBody.position.z).addScaledVector(aim, grabDistance);
+      grabbedProp.body.wakeUp();
+      grabbedProp.body.velocity.set(
+        (holdPos.x - grabbedProp.body.position.x) * 12,
+        (holdPos.y - grabbedProp.body.position.y) * 12,
+        (holdPos.z - grabbedProp.body.position.z) * 12
+      );
+      grabbedProp.body.angularVelocity.set(0, 0, 0);
+    }
+ 
+    for (const id in activeCars) {
+      const c = activeCars[id];
+      if (c === drivingCar) continue;
+      const b = c.body;
+      b.position.x += (c.tp.x - b.position.x) * 0.3; b.position.y += (c.tp.y - b.position.y) * 0.3; b.position.z += (c.tp.z - b.position.z) * 0.3;
+      tmpQ.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w).slerp(c.tq, 0.3);
+      b.quaternion.set(tmpQ.x, tmpQ.y, tmpQ.z, tmpQ.w); syncBodyAABB(b);
+    }
+ 
+    let throttle = 0, steer = 0;
+    if (isPlaying && !isShatteredLocal) {
+      if (_d.activeElement !== chatInput) {
+        if (activeActions.forward) throttle++; if (activeActions.backward) throttle--;
+        if (activeActions.left) steer++; if (activeActions.right) steer--;
+      }
+      if (joyMove.x !== 0 || joyMove.y !== 0) { throttle = -joyMove.y; steer = -joyMove.x; }
+      if (drivingCar) {
+        const c = drivingCar, v = c.vehicle, spd = c.body.velocity.length();
+        const f = (throttle > 0 && spd > 38) ? 0 : -throttle * 950;
+        v.applyEngineForce(f, 2); v.applyEngineForce(f, 3);
+        const brake = activeActions.jump ? 40 : (throttle === 0 ? 4 : 0);
+        for (let i = 0; i < 4; i++) v.setBrake(brake, i);
+        c.steer += (steer * 0.5 - c.steer) * Math.min(1, 8 * dt);
+        v.setSteeringValue(c.steer, 0); v.setSteeringValue(c.steer, 1);
+      }
+    }
+ 
+    if (isPlaying && !isShatteredLocal && !drivingCar && !marbleMode) {
+      if (activeActions.jump) tryJump();
+      if (_0xV.getFly() && !activeActions.jump) playerBody.velocity.y = 0;
+      const spdM = _0xV.getSpd() * Math.max(0.65, Math.min(1.6, Math.sqrt(playerScale)));
+      const mv = new THREE.Vector3(-steer, 0, -throttle);
+      if (mv.lengthSq() > 0) {
+        mv.normalize();
+        mv.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawObj.rotation.y);
+        walkBobTimer += dt * 9 * spdM;
+      } else walkBobTimer = 0;
+      const targetVx = mv.x * 15 * spdM;
+      const targetVz = mv.z * 15 * spdM;
+      const accel = Math.min(1, dt * 16);
+      playerBody.velocity.x += (targetVx - playerBody.velocity.x) * accel;
+      playerBody.velocity.z += (targetVz - playerBody.velocity.z) * accel;
+    }
+ 
+    staticMapEntries.forEach((entry) => { entry.body.collisionResponse = true; });
+    for (const id in activeProps) {
+      if (activeProps[id].body) activeProps[id].body.collisionResponse = true;
+    }
+ 
+    const pPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+    for (const ownerId in playerPortals) {
+      const pair = playerPortals[ownerId];
+      if (!pair || !pair.blue.active || !pair.orange.active) continue;
+      [pair.blue, pair.orange].forEach((portal) => {
+        if (!portal.wallBody) portal.wallBody = findClosestWallBody(portal.pos, portal.normal, portal.wallIdx);
+        if (!portal.wallBody || portal.wallBody.isFloor) return;
+ 
+        let inMouth = (!drivingCar && !isShatteredLocal && isInsidePortalAperture(pPos, portal, playerRadius));
+        if (!inMouth) {
+          for (const cid in activeCars) {
+            const cPos = new THREE.Vector3(activeCars[cid].body.position.x, activeCars[cid].body.position.y, activeCars[cid].body.position.z);
+            if (isInsidePortalAperture(cPos, portal, 2.6 * (activeCars[cid].scaleFactor || 1))) { inMouth = true; break; }
+          }
+        }
+        if (!inMouth) {
+          for (let ri = 0; ri < ragdolls.length; ri++) {
+            const rPos = new THREE.Vector3(ragdolls[ri].torso.position.x, ragdolls[ri].torso.position.y, ragdolls[ri].torso.position.z);
+            if (isInsidePortalAperture(rPos, portal, 1.4)) { inMouth = true; break; }
+          }
+        }
+        if (!inMouth) {
+          for (const id in activeProps) {
+            const pr = activeProps[id];
+            if (!pr.isStatic && isInsidePortalAperture(pr.mesh.position, portal, pr.boundR)) { inMouth = true; break; }
+          }
+        }
+        if (inMouth) portal.wallBody.collisionResponse = false;
+      });
+    }
+ 
+    world.step(1 / 60, dt, 3);
+ 
+    for (let i = ragdolls.length - 1; i >= 0; i--) {
+      const r = ragdolls[i];
+      if (r.portalCd > 0) r.portalCd -= dt;
+      r.parts.forEach((p) => {
+        p.mesh.position.copy(p.body.position);
+        p.mesh.quaternion.copy(p.body.quaternion);
+        p.mesh.material.clippingPlanes = [];
+        if (p.cloneMesh) p.cloneMesh.visible = false;
+      });
+ 
+      const tPos = new THREE.Vector3(r.torso.position.x, r.torso.position.y, r.torso.position.z);
+      const nearest = findClosestActivePortalPair(tPos);
+      if (nearest && isInsidePortalAperture(tPos, nearest.srcP, 1.35)) {
+        const { srcP, dstP } = nearest;
+        const rel = tPos.clone().sub(srcP.pos);
+        const normalDist = rel.dot(srcP.normal);
+        const vel = new THREE.Vector3(r.torso.velocity.x, r.torso.velocity.y, r.torso.velocity.z);
+        const movingIn = vel.dot(srcP.normal) < -0.02;
+ 
+        r.parts.forEach((p) => {
+          p.mesh.material.clippingPlanes = [srcP.clipPlane];
+          if (p.cloneMesh) {
+            p.cloneMesh.material.clippingPlanes = [dstP.clipPlane];
+            p.cloneMesh.position.copy(transformPointBetweenPortals(p.mesh.position, srcP, dstP));
+            p.cloneMesh.quaternion.copy(transformQuatBetweenPortals(p.mesh.quaternion, srcP, dstP));
+            p.cloneMesh.visible = true;
+          }
+        });
+ 
+        const isFloorRag = srcP.normal.y > 0.6;
+        const torsoBottomDist = (tPos.y - 0.5) - srcP.pos.y;
+        const shouldRagTp = isFloorRag
+          ? (torsoBottomDist <= 0.55 && torsoBottomDist >= -1.2 && r.portalCd <= 0)
+          : (normalDist <= 0.48 && movingIn && r.portalCd <= 0);
+        if (shouldRagTp) seamlessTeleportRagdoll(r, srcP, dstP);
+      }
+      if (r.life !== Infinity && (r.life -= dt) <= 0) removeRagdoll(r);
+    }
+ 
+    if (localRagdoll) { playerObj.position.copy(localRagdoll.torso.position); syncPlayerState(); }
+ 
+    if (isPlaying && !isShatteredLocal) {
+      if (drivingCar) {
+        vehiclePrompt.classList.remove('hidden');
+        vehiclePrompt.innerText = `Sürüş — İn: [${keybinds.interactCar.toUpperCase()}] | Portallardan Araba ile Geçebilirsiniz!`;
+        playerObj.position.copy(drivingCar.body.position); syncPlayerState();
+      } else {
+        if (playerBody.position.y < -30) { playerBody.position.set(0, 15, 8); playerBody.velocity.set(0, 0, 0); }
+        if (playerBody.velocity.y < -45) playerBody.velocity.y = -45;
+        playerObj.position.copy(playerBody.position);
+ 
+        const moveSpd = Math.hypot(playerBody.velocity.x, playerBody.velocity.z);
+        localRig.root.visible = thirdPerson && !marbleMode;
+        localRig.root.position.set(playerBody.position.x, playerBody.position.y - playerRadius, playerBody.position.z);
+        localRig.root.rotation.y = yawObj.rotation.y;
+        if (localArmSwing > 0) localArmSwing = Math.max(0, localArmSwing - dt * 4.5);
+        updateRigHeldItems(localRig, FINGER_MODES[fingerModeIdx].id, selectedObj);
+        animateMinecraftRig(localRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
+ 
+        localPortalCloneRig.root.visible = false;
+        setGroupClippingPlane(localRig.root, []);
+ 
+        const curPlayerPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+        const nearestPortal = findClosestActivePortalPair(curPlayerPos);
+        if (nearestPortal && isInsidePortalAperture(curPlayerPos, nearestPortal.srcP, playerRadius)) {
+          const nearP = nearestPortal.srcP;
+          const farP  = nearestPortal.dstP;
+          const relVec = curPlayerPos.clone().sub(nearP.pos);
+          const normalDist = relVec.dot(nearP.normal);
+          const velVec = new THREE.Vector3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
+          const movingIntoPortal = velVec.dot(nearP.normal) < -0.02;
+ 
+          setGroupClippingPlane(localRig.root, [nearP.clipPlane]);
+          setGroupClippingPlane(localPortalCloneRig.root, [farP.clipPlane]);
+ 
+          const previewRatio = getPortalEffectiveScale(farP) / getPortalEffectiveScale(nearP);
+          const nextScale = Math.max(0.25, Math.min(4.5, playerScale * previewRatio));
+          localPortalCloneRig.root.scale.set(nextScale, nextScale, nextScale);
+ 
+          const cloneFootPos = transformPointBetweenPortals(localRig.root.position, nearP, farP);
+          localPortalCloneRig.root.position.copy(cloneFootPos);
+          // Yerdeki portaldan girerken preview modeli cikis portalinin rotasyonuyla tam senkronize
+          const exitYaw = getPortalExitYaw(nearP, farP, yawObj.rotation.y);
+          localPortalCloneRig.root.rotation.y = exitYaw;
+          updateRigHeldItems(localPortalCloneRig, FINGER_MODES[fingerModeIdx].id, selectedObj);
+          animateMinecraftRig(localPortalCloneRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
+          localPortalCloneRig.root.visible = true;
+
+          // Yerdeki portallarda yavas yururken, adimlarken veya duserken hatasiz isinlanma mantigi
+          const isFloor = nearP.normal.y > 0.6;
+          const isCeil  = nearP.normal.y < -0.6;
+          let shouldTeleport = false;
+
+          if (isFloor) {
+            const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
+            if (feetDist <= 0.48 && feetDist >= -1.2 * playerScale && portalCooldown <= 0) {
+              shouldTeleport = true;
+            }
+          } else if (isCeil) {
+            const headDist = nearP.pos.y - (curPlayerPos.y + playerRadius);
+            if (headDist <= 0.48 && headDist >= -1.2 * playerScale && portalCooldown <= 0) {
+              shouldTeleport = true;
+            }
+          } else {
+            const minNormalDist = Math.max(0.55, playerRadius * 0.75);
+            if (normalDist <= minNormalDist && (movingIntoPortal || normalDist <= 0.28) && portalCooldown <= 0) {
+              shouldTeleport = true;
+            }
+          }
+
+          if (shouldTeleport) seamlessTeleportPlayer(nearP, farP);
+        }
+ 
+        const nearStatue = findNearestStatue();
+        if (grabbedProp) {
+          vehiclePrompt.classList.remove('hidden');
+          vehiclePrompt.innerText = `🧲 Tutuluyor — Fırlat: [Sol Tık] | Bırak: [${keybinds.interactCar.toUpperCase()}] | Mesafe: [Tekerlek]`;
+        } else if (nearStatue) {
+          vehiclePrompt.classList.remove('hidden');
+          vehiclePrompt.innerText = `${nearStatue.title} — Kuşan: [${keybinds.interactCar.toUpperCase()}]`;
+        } else if (findNearestAvailableCar()) {
+          vehiclePrompt.classList.remove('hidden');
+          vehiclePrompt.innerText = `Arabaya Bin: [${keybinds.interactCar.toUpperCase()}] 🚗`;
+        } else { vehiclePrompt.classList.add('hidden'); }
+        syncPlayerState();
+      }
+    }
+ 
+    fingerGunGroup.visible = isPlaying && showFingerGun && !thirdPerson && !drivingCar && !marbleMode && !isShatteredLocal;
+    if (fingerRecoil > 0) fingerRecoil = Math.max(0, fingerRecoil - dt * 6.5);
+    fingerGunGroup.position.x = 0.32 + Math.cos(walkBobTimer) * 0.012;
+    fingerGunGroup.position.y = -0.26 + Math.abs(Math.sin(walkBobTimer)) * 0.015 + fingerRecoil * 0.04;
+    fingerGunGroup.position.z = -0.48 + fingerRecoil * 0.09;
+    fingerGunGroup.rotation.x = 0.05 + fingerRecoil * 0.38;
+ 
+    const isPortalMode = FINGER_MODES[fingerModeIdx].id === 'portal';
+    const isGravMode = FINGER_MODES[fingerModeIdx].id === 'gravity';
+    if (isPlaying && showGhost && !drivingCar && !isShatteredLocal && !isPortalMode && !isGravMode) {
+      const tr = computePlacementTransform(selectedObj);
+      ghostMesh.position.set(tr.x, tr.y, tr.z); ghostMesh.quaternion.copy(tr.q); ghostMesh.visible = true;
+    } else ghostMesh.visible = false;
+ 
+    for (const id in activeCars) {
+      const c = activeCars[id];
+      if (c.portalCd > 0) c.portalCd -= dt;
+      c.group.position.copy(c.body.position);
+      c.group.quaternion.copy(c.body.quaternion);
+      c.portalClone.visible = false;
+      setGroupClippingPlane(c.group, []);
+ 
+      const cPos = c.group.position;
+      const nearest = findClosestActivePortalPair(cPos);
+      if (nearest && isInsidePortalAperture(cPos, nearest.srcP, 2.5 * (c.scaleFactor || 1))) {
+        const { srcP, dstP } = nearest;
+        const rel = cPos.clone().sub(srcP.pos);
+        const normalDist = rel.dot(srcP.normal);
+        const vel = new THREE.Vector3(c.body.velocity.x, c.body.velocity.y, c.body.velocity.z);
+        const movingIn = vel.dot(srcP.normal) < -0.05;
+ 
+        const ratio = getPortalEffectiveScale(dstP) / getPortalEffectiveScale(srcP);
+        const previewCarScale = Math.max(0.4, Math.min(3.0, (c.scaleFactor || 1) * ratio));
+        c.portalClone.scale.set(previewCarScale, previewCarScale, previewCarScale);
+ 
+        setGroupClippingPlane(c.group, [srcP.clipPlane]);
+        setGroupClippingPlane(c.portalClone, [dstP.clipPlane]);
+        c.portalClone.position.copy(transformPointBetweenPortals(cPos, srcP, dstP));
+        c.portalClone.quaternion.copy(transformQuatBetweenPortals(c.group.quaternion, srcP, dstP));
+        c.portalClone.visible = true;
+ 
+        const isFloorCar = srcP.normal.y > 0.6;
+        const wheelDist = (cPos.y - 0.7 * (c.scaleFactor || 1)) - srcP.pos.y;
+        const shouldCarTp = isFloorCar
+          ? (wheelDist <= 0.75 && wheelDist >= -1.8 && c.portalCd <= 0)
+          : (normalDist <= 0.65 && movingIn && c.portalCd <= 0);
+        if (shouldCarTp) seamlessTeleportCar(c, srcP, dstP);
+      }
+    }
+ 
+    for (const id in activeProps) {
+      const p = activeProps[id]; if (p.isStatic) continue;
+      if (p.portalCd > 0) p.portalCd -= dt;
+ 
+      const av = p.body.angularVelocity;
+      const avLen = Math.hypot(av.x, av.y, av.z);
+      if (avLen > 4.5) {
+        const s = 4.5 / avLen;
+        av.x *= s; av.y *= s; av.z *= s;
+      }
+      p.mesh.position.copy(p.body.position);
+      p.mesh.quaternion.copy(p.body.quaternion);
+ 
+      if (p.portalClone) p.portalClone.visible = false;
+      p.mesh.material.clippingPlanes = [];
+ 
+      const pos = p.mesh.position;
+      const nearest = findClosestActivePortalPair(pos);
+      if (nearest && isInsidePortalAperture(pos, nearest.srcP, p.boundR)) {
+        const { srcP, dstP } = nearest;
+        const rel = pos.clone().sub(srcP.pos);
+        const normalDist = rel.dot(srcP.normal);
+        const vel = new THREE.Vector3(p.body.velocity.x, p.body.velocity.y, p.body.velocity.z);
+        const movingIn = vel.dot(srcP.normal) < -0.02 || grabbedProp === p;
+ 
+        p.mesh.material.clippingPlanes = [srcP.clipPlane];
+        if (p.portalClone) {
+          const ratio = getPortalEffectiveScale(dstP) / getPortalEffectiveScale(srcP);
+          const previewScale = Math.max(0.25, Math.min(4.5, (p.scaleFactor || 1.0) * ratio));
+          p.portalClone.scale.set(previewScale, previewScale, previewScale);
+          p.portalClone.material.clippingPlanes = [dstP.clipPlane];
+          p.portalClone.position.copy(transformPointBetweenPortals(pos, srcP, dstP));
+          p.portalClone.quaternion.copy(transformQuatBetweenPortals(p.mesh.quaternion, srcP, dstP));
+          p.portalClone.visible = true;
+        }
+ 
+        const isFloorProp = srcP.normal.y > 0.6;
+        const bottomDist = (pos.y - p.boundR) - srcP.pos.y;
+        const shouldPropTp = isFloorProp
+          ? (bottomDist <= 0.45 && bottomDist >= -1.2 && p.portalCd <= 0)
+          : (normalDist <= 0.45 && (movingIn || grabbedProp === p) && p.portalCd <= 0);
+        if (shouldPropTp) seamlessTeleportProp(p, srcP, dstP);
+      }
+    }
+ 
+    for (const id in remotePlayers) {
+      const rp = remotePlayers[id];
+      if (rp.rag) stepRemoteRagdoll(rp);
+      if (rp.isShattered) { rp.body.position.set(0, -500, 0); syncBodyAABB(rp.body); continue; }
+      rp.group.position.lerp(rp.targetPos, 0.25);
+      const moveSpd = rp.group.position.distanceTo(rp.prevPos) / Math.max(dt, 0.001);
+      rp.prevPos.copy(rp.group.position);
+      if (rp.swingTimer > 0) rp.swingTimer = Math.max(0, rp.swingTimer - dt * 4.5);
+      const wId = (rp.holdingWeapon !== undefined && FINGER_MODES[rp.holdingWeapon]) ? FINGER_MODES[rp.holdingWeapon].id : 'portal';
+      updateRigHeldItems(rp.rig, wId, rp.holdingItem || 'ramp');
+      animateMinecraftRig(rp.rig, moveSpd, dt, rp.swingTimer || 0);
+      const diff = rp.targetRotY - rp.group.rotation.y;
+      rp.group.rotation.y += Math.atan2(Math.sin(diff), Math.cos(diff)) * 0.25;
+      if (rp.driving) rp.body.position.set(0, -500, 0);
+      else rp.body.position.set(rp.group.position.x, rp.group.position.y + BASE_PLAYER_RADIUS * (rp.remoteScale || 1), rp.group.position.z);
+      syncBodyAABB(rp.body);
+    }
+ 
+    updatePortalViews();
+    renderer.render(scene, camera);
+  }
+ 
+  $('connectBtn').addEventListener('click', (e) => { e.preventDefault(); connectToServer(); });
+  $('playBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!isConnected) connectToServer();
+    startScreen.classList.add('hidden'); crosshair.classList.remove('hidden');
+    $('statusHud').classList.remove('hidden'); updateStatsUI(100, 50, 100);
+    isPlaying = true;
+    isShatteredLocal = false;
+    if (localRagdoll) { removeRagdoll(localRagdoll); localRagdoll = null; }
+ 
+    playerBody.position.set(0, 15, 8);
+    playerBody.velocity.set(0, 0, 0);
+    playerBody.angularVelocity.set(0, 0, 0);
+    if (!world.bodies.includes(playerBody)) world.addBody(playerBody);
+    playerBody.wakeUp();
+ 
+    playerObj.position.copy(playerBody.position);
+    yawObj.rotation.set(0, 0, 0);
+    pitchObj.rotation.set(0, 0, 0);
+    applyCameraRig();
+ 
+    if (!mobileMode && innerWidth > 768) _d.body.requestPointerLock();
+  });
+ 
+  applyWeaponModeUI();
+  animate();
+})(window, document);
+</script>
+</body>
+</html>

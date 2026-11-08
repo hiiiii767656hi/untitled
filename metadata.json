@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Minecraft Sandbox - Portals & Physics",
+  "description": "Multiplayer 3D physics sandbox with Minecraft skins, realistic synchronized portals, vehicles, and ragdolls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
