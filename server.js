@@ -10,12 +10,18 @@
  * Çalıştırma: node server.js
  */
 
-const http = require('http');
-const crypto = require('crypto');
-const dgram = require('dgram');
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+import http from 'http';
+import crypto from 'crypto';
+import dgram from 'dgram';
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASS || 'mert2014';
