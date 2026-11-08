@@ -142,7 +142,13 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     <button id="startFullscreenBtn" type="button" class="px-5 py-3.5 bg-gray-800 text-cyan-300 font-bold rounded-full text-base border-2 border-cyan-500/40 cursor-pointer">⛶ Tam Ekran</button>
   </div>
 </div>
- 
+
+<!-- PORTAL OYUNUNDAKİ GİBİ SMOOTH WARP/GEÇİŞ ANİMASYONU OVERLAY -->
+<div id="portalTransitionOverlay" style="pointer-events:none;position:fixed;inset:0;z-index:9998;opacity:0;transition:opacity 0.28s cubic-bezier(0.1, 0.9, 0.2, 1), transform 0.28s ease-out;transform:scale(1.08);background:transparent;"></div>
+
+<!-- SUNUCU BAĞLANTISI KESİLDİĞİNDE UYARI BİLDİRİMİ -->
+<div id="disconnectToast" class="hidden fixed top-6 left-1/2 -translate-x-1/2 z-[10000] bg-red-950/95 border-2 border-red-500/80 text-white font-bold px-6 py-3 rounded-xl shadow-[0_0_25px_rgba(239,68,68,0.7)] text-sm tracking-wide transition-opacity duration-300 flex items-center gap-2 pointer-events-none"></div>
+
 <div id="topBar" class="no-select">
   <div class="flex gap-1.5 flex-wrap">
     <button id="mainMenuBtn" type="button" class="ui-btn text-xs" style="border-color:#f43f5e" title="Ana Menüye Dön (ESC)">🏠 Ana Menü</button>
@@ -777,6 +783,14 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   function returnToMainMenu() {
     isPlaying = false;
     if (_d.pointerLockElement) _d.exitPointerLock();
+    if (drivingCar) exitCar();
+    if (grabbedProp) grabbedProp = null;
+    if (playerBody) {
+      playerBody.velocity.set(0, 0, 0);
+      playerBody.angularVelocity.set(0, 0, 0);
+    }
+    if (localRig && localRig.root) localRig.root.visible = false;
+    if (localPortalCloneRig && localPortalCloneRig.root) localPortalCloneRig.root.visible = false;
     settingsModal.style.display = 'none';
     keybindsModal.style.display = 'none';
     adminModal.style.display = 'none';
@@ -1572,6 +1586,118 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     return bestSrc ? { srcP: bestSrc, dstP: bestDst, dist: minDist } : null;
   }
  
+    // PORTAL SESİ, SMOOTH WARP EFEKTİ VE BAĞLANTI KESİLME YÖNETİMİ
+  let portalFovBoost = 0;
+  let exitPortalClipTimer = 0;
+  let lastExitPortal = null;
+  let _portalAudioCtx = null;
+
+  function getPortalAudioContext() {
+    if (!_portalAudioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) _portalAudioCtx = new AC();
+    }
+    if (_portalAudioCtx && _portalAudioCtx.state === 'suspended') {
+      _portalAudioCtx.resume();
+    }
+    return _portalAudioCtx;
+  }
+
+  function playPortalPassSound(isOrange) {
+    try {
+      const ctx = getPortalAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const baseFreq = isOrange ? 240 : 310;
+
+      const osc = ctx.createOscillator();
+      const oscHarmonic = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      oscHarmonic.type = 'triangle';
+
+      osc.frequency.setValueAtTime(baseFreq * 0.75, now);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 2.2, now + 0.12);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.85, now + 0.35);
+
+      oscHarmonic.frequency.setValueAtTime(baseFreq * 1.5, now);
+      oscHarmonic.frequency.exponentialRampToValueAtTime(baseFreq * 3.4, now + 0.1);
+      oscHarmonic.frequency.exponentialRampToValueAtTime(baseFreq * 0.55, now + 0.35);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(baseFreq * 1.6, now);
+      filter.frequency.exponentialRampToValueAtTime(baseFreq * 4.0, now + 0.12);
+      filter.frequency.exponentialRampToValueAtTime(baseFreq * 1.1, now + 0.35);
+      filter.Q.value = 4.2;
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.38, now + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      osc.connect(filter);
+      oscHarmonic.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      oscHarmonic.start(now);
+      osc.stop(now + 0.4);
+      oscHarmonic.stop(now + 0.4);
+    } catch (e) {}
+  }
+
+  function triggerPortalWarpEffect(isOrange) {
+    const overlay = $('portalTransitionOverlay');
+    if (overlay) {
+      const col = isOrange ? '249, 115, 22' : '56, 189, 248';
+      overlay.style.background = `radial-gradient(ellipse at center, rgba(${col}, 0.18) 12%, rgba(${col}, 0.65) 65%, rgba(${col}, 0.95) 100%)`;
+      overlay.style.opacity = '1';
+      overlay.style.transform = 'scale(1.0)';
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          overlay.style.opacity = '0';
+          overlay.style.transform = 'scale(1.1)';
+        }, 45);
+      });
+    }
+    portalFovBoost = 12.0;
+    playPortalPassSound(isOrange);
+  }
+
+  function showDisconnectToast(msg) {
+    const toast = $('disconnectToast');
+    if (!toast) return;
+    toast.textContent = `🔌 ${msg}`;
+    toast.classList.remove('hidden');
+    toast.style.opacity = '1';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.classList.add('hidden'), 350);
+    }, 4500);
+  }
+
+  function handleDisconnect(reason = 'Sunucu ile bağlantı kesildi!') {
+    const wasPlaying = isPlaying;
+    isConnected = false;
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      try { socket.close(); } catch (e) {}
+      socket = null;
+    }
+    Object.keys(remotePlayers).forEach(removeRemotePlayer);
+
+    if (wasPlaying) {
+      returnToMainMenu();
+      setStatus(`⚠️ ${reason} Ana menüye yönlendirildiniz.`, 'text-red-400 font-bold bg-red-950/80 p-2.5 rounded-lg border border-red-500/50 animate-pulse');
+      showDisconnectToast(reason);
+    } else {
+      setStatus(`⚠️ ${reason}`, 'text-amber-400 font-bold');
+    }
+  }
+
   const _pCamWorldPos = new THREE.Vector3();
   const _pCamQuat = new THREE.Quaternion();
   const _pRotY180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
@@ -2379,10 +2505,12 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     };
     socket.onmessage = (e) => { try { handleServerMessage(JSON.parse(e.data)); } catch (err) {} };
     socket.onerror = () => {
-      isConnected = false;
-      setStatus(`Çevrimdışı Mod (${url} adresine ulaşılamadı)`, 'text-amber-400');
+      handleDisconnect('Sunucu bağlantı hatası oluştu!');
     };
-    socket.onclose = () => { isConnected = false; Object.keys(remotePlayers).forEach(removeRemotePlayer); };
+    socket.onclose = (e) => {
+      const reasonMsg = (e && e.reason) ? `Bağlantı kapandı: ${e.reason}` : 'Sunucu ile bağlantı kesildi!';
+      handleDisconnect(reasonMsg);
+    };
   }
  
   function sendPacket(o) {
@@ -2393,6 +2521,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   function handleServerMessage(msg) {
     if (!msg || !msg.type) return;
     switch (msg.type) {
+      case 'kick': {
+        handleDisconnect(msg.reason || 'Sunucudan atıldınız.');
+        break;
+      }
       case 'init': {
         const oldUid = _uid;
         _uid = msg.selfId || _uid; _syncAnonUI();
@@ -3107,7 +3239,12 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     const exitYaw = getPortalExitYaw(srcPortal, dstPortal, yawObj.rotation.y);
     yawObj.rotation.y = exitYaw;
 
-    portalCooldown = 0.25;
+    // Portal oyunundaki gibi anında pürüzsüz warp/geçiş animasyonu, FOV esnemesi ve ses efekti
+    triggerPortalWarpEffect(srcPortal.isOrange);
+    lastExitPortal = dstPortal;
+    exitPortalClipTimer = 0.22;
+
+    portalCooldown = 0.35;
     syncPlayerState(true, true);
   }
  
@@ -3458,24 +3595,28 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
           animateMinecraftRig(localPortalCloneRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
           localPortalCloneRig.root.visible = true;
 
-          // Yerdeki portallarda yavas yururken, adimlarken veya duserken hatasiz isinlanma mantigi
+          // Portal oyunundaki gibi smooth geçiş: Portal yüzeyine adım atıldığında direkt snap/tp atmaz,
+          // önce clipping planes ile oyuncunun portala girişini gösterir, yüzeyi tam geçerken (horizon crossing) ışınlar.
           const isFloor = nearP.normal.y > 0.6;
           const isCeil  = nearP.normal.y < -0.6;
           let shouldTeleport = false;
 
           if (isFloor) {
+            // Yerdeki portal: Oyuncunun ağırlık merkezi zemin portal düzlemine temas edip içine adım atarken
             const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
-            if (feetDist <= 0.48 && feetDist >= -1.2 * playerScale && portalCooldown <= 0) {
+            const centerDist = curPlayerPos.y - nearP.pos.y;
+            if (feetDist <= 0.12 && centerDist <= 0.85 * playerScale && feetDist >= -1.2 * playerScale && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else if (isCeil) {
             const headDist = nearP.pos.y - (curPlayerPos.y + playerRadius);
-            if (headDist <= 0.48 && headDist >= -1.2 * playerScale && portalCooldown <= 0) {
+            if (headDist <= 0.12 && headDist >= -1.2 * playerScale && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else {
-            const minNormalDist = Math.max(0.55, playerRadius * 0.75);
-            if (normalDist <= minNormalDist && (movingIntoPortal || normalDist <= 0.28) && portalCooldown <= 0) {
+            // Duvardaki portal: Karakter portalın içine doğru adım atıp düzlemi keserken (normalDist <= 0.15)
+            const crossingHorizon = normalDist <= 0.15 || (normalDist <= 0.25 && movingIntoPortal);
+            if (crossingHorizon && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           }
@@ -3498,6 +3639,19 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       }
     }
  
+    // Portal FOV Warp Yaylanması & Çıkış Portal Kırpma Yumuşatması
+    if (portalFovBoost > 0) {
+      portalFovBoost = Math.max(0, portalFovBoost - dt * 38.0);
+      camera.fov = 75 + portalFovBoost;
+      camera.updateProjectionMatrix();
+    }
+    if (exitPortalClipTimer > 0) {
+      exitPortalClipTimer = Math.max(0, exitPortalClipTimer - dt);
+      if (lastExitPortal && localRig && localRig.root) {
+        setGroupClippingPlane(localRig.root, [lastExitPortal.clipPlane]);
+      }
+    }
+
     fingerGunGroup.visible = isPlaying && showFingerGun && !thirdPerson && !drivingCar && !marbleMode && !isShatteredLocal;
     if (fingerRecoil > 0) fingerRecoil = Math.max(0, fingerRecoil - dt * 6.5);
     fingerGunGroup.position.x = 0.32 + Math.cos(walkBobTimer) * 0.012;

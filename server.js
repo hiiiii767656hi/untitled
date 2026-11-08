@@ -217,11 +217,14 @@ function teleportPlayer(targetId, x, y, z) {
 function kickPlayer(targetId, reason = 'Sunucudan atıldınız.') {
   const p = players[targetId];
   if (!p) return false;
+  sendToClient(p.client, { type: 'kick', reason });
   systemChat(`Sunucudan atıldınız: ${reason}`, p.client, '#ef4444');
   removePlayerById(targetId);
-  if (p.client && p.client.sock) {
-    try { p.client.sock.destroy(); } catch (e) {}
-  }
+  setTimeout(() => {
+    if (p.client && p.client.sock) {
+      try { p.client.sock.destroy(); } catch (e) {}
+    }
+  }, 40);
   p.client.alive = false;
   return true;
 }
