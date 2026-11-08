@@ -1209,23 +1209,26 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     return t;
   }
  
-  function addStaticBlock(x, y, z, w, h, d, color, neon = false, rot = [0, 0, 0]) {
+  function addStaticBlock(x, y, z, w, h, d, color, neon = false, rot = [0, 0, 0], isBounce = false) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({
-      color, roughness: neon ? 0.2 : 0.7, emissive: neon ? color : 0, emissiveIntensity: neon ? 0.6 : 0
+      color, roughness: neon ? 0.2 : (isBounce ? 0.15 : 0.7),
+      emissive: neon ? color : (isBounce ? color : 0),
+      emissiveIntensity: neon ? 0.6 : (isBounce ? 0.5 : 0)
     }));
     mesh.position.set(x, y + h / 2, z); mesh.rotation.set(rot[0], rot[1], rot[2], 'XYZ');
     mesh.castShadow = mesh.receiveShadow = true;
     const wallIdx = staticMapEntries.length;
-    const isHorizontalPlatform = (h <= 2.2 && w >= 12 && d >= 12);
-    mesh.userData = { wallIdx, isFloor: isHorizontalPlatform };
+    const isHorizontalPlatform = (h <= 2.5 && w >= 7 && d >= 7);
+    mesh.userData = { wallIdx, isFloor: isHorizontalPlatform, isBounce };
     scene.add(mesh); intersectableObjects.push(mesh);
- 
-    const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: pm });
+
+    const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: isBounce ? bounceMat : pm });
     body.isFloor = isHorizontalPlatform;
+    body.isTrampoline = !!isBounce;
     body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
     body.position.copy(mesh.position); body.quaternion.set(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w);
     syncBodyAABB(body); world.addBody(body);
-    staticMapEntries.push({ mesh, body, wallIdx, isFloor: isHorizontalPlatform });
+    staticMapEntries.push({ mesh, body, wallIdx, isFloor: isHorizontalPlatform, isBounce });
   }
  
   (function() {
@@ -1280,12 +1283,84 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     B.push([tx + 70, 0, tz, 2, 3, 90, 0xef4444, true]);
     B.push([tx, 0, tz, 90, 3, 40, 0x1f2937, false]);
     B.push([tx, 3, tz, 10, 0.5, 10, 0xfacc15, true]);
-    B.push([0, 0, -300, 600, 20, 4, 0x111827, false]);
-    B.push([0, 0, 300, 600, 20, 4, 0x111827, false]);
-    B.push([-300, 0, 0, 4, 20, 600, 0x111827, false]);
-    B.push([300, 0, 0, 4, 20, 600, 0x111827, false]);
- 
-    B.forEach((b) => addStaticBlock(b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]));
+
+    // === GELİŞTİRİLMİŞ YENİ HARİTA BÖLGELERİ ===
+    // 1. APERTURE PORTAL TEST LAB KALESİ (Büyük Dikey Düşüş & Fırlatma Odası)
+    const pcX = 0, pcZ = -175;
+    // Ana Portal Kalesi Zemin & Duvarları (Kuvars ve Pürüzsüz Portal Duvarları)
+    B.push([pcX, 0, pcZ, 46, 2, 54, 0x0f172a, false]); // Taban
+    B.push([pcX - 22, 0, pcZ, 2.5, 34, 54, 0xf8fafc, false]); // Batı Yüksek Portal Duvarı (Kuvars)
+    B.push([pcX + 22, 0, pcZ, 2.5, 34, 54, 0xf8fafc, false]); // Doğu Yüksek Portal Duvarı (Kuvars)
+    B.push([pcX, 0, pcZ - 26, 46, 34, 2.5, 0x0284c7, true]);  // Kuzey Arka Duvarı (Neon Cyan)
+    B.push([pcX - 14, 0, pcZ + 26, 14, 34, 2.5, 0x334155, false]); // Ön Giriş Sol
+    B.push([pcX + 14, 0, pcZ + 26, 14, 34, 2.5, 0x334155, false]); // Ön Giriş Sağ
+    // Yüksek Atlama Platformu & Balkon (Y=32 Fırlatma Atlama Tahtası - Yerdeki Portala Düşüş İçin)
+    B.push([pcX, 32, pcZ - 12, 18, 1.8, 22, 0x38bdf8, true]); // Yüksek Gözlem Balkonu
+    B.push([pcX, 33.8, pcZ - 2, 6, 0.8, 12, 0xfacc15, true]); // Atlama Tahtası (Dalış Ucu)
+    // Kale Tabanında Yere Gömülü Özel Portal Hedefi (Zemin Portal Alanı)
+    B.push([pcX, 2, pcZ, 12, 0.6, 12, 0xf97316, true]); // Neon Turuncu Zemin Hedef Pisti
+    // Kale İçi Zıplama Trambolini (Yüksek Balkona Fırlatıcı)
+    B.push([pcX + 12, 2, pcZ + 12, 6, 0.6, 6, 0xa855f7, true, [0, 0, 0], true]); // Zıplatıcı Trambolin
+
+    // 2. MEGA ARABA AKROBASİ VE GÖKYÜZÜ FIRLATMA RAMPASI (Stunt Mega Ramp)
+    const rampX = -200, rampZ = -20;
+    // Hızlanma Pisti
+    B.push([rampX, 0, rampZ - 50, 16, 1.5, 80, 0x1e1b4b, false]);
+    // Kavisli Yükselen Rampa Aşamaları (Y=0'dan Y=28'e Ulaşan Mega Rampa)
+    B.push([rampX, 1.5, rampZ + 5,  16, 2.5, 20, 0xf43f5e, true, [0.15, 0, 0]]);
+    B.push([rampX, 6.0, rampZ + 24, 16, 3.0, 20, 0xf43f5e, true, [0.32, 0, 0]]);
+    B.push([rampX, 13.5, rampZ + 42, 16, 3.5, 20, 0xec4899, true, [0.48, 0, 0]]);
+    B.push([rampX, 22.0, rampZ + 59, 16, 4.0, 18, 0xfacc15, true, [0.60, 0, 0]]); // Fırlatıcı Uç
+    // Neon Hızlanma Halka Kemerleri
+    [-30, -10, 10].forEach((offsetZ) => {
+      B.push([rampX - 9, 0, rampZ + offsetZ, 1.5, 12, 1.5, 0x06b6d4, true]);
+      B.push([rampX + 9, 0, rampZ + offsetZ, 1.5, 12, 1.5, 0x06b6d4, true]);
+      B.push([rampX, 11, rampZ + offsetZ, 19.5, 1.5, 1.5, 0x06b6d4, true]);
+    });
+    // Havada Asılı İniş ve Portal Platformu (Y=26 Akrobasi İniş Pisti)
+    B.push([rampX, 24, rampZ + 105, 30, 2.0, 36, 0x312e81, false]);
+    B.push([rampX, 26, rampZ + 105, 14, 0.6, 14, 0x10b981, true]); // Havada Yer Portalı Hedef Alanı
+    B.push([rampX - 16, 25, rampZ + 105, 2, 4, 38, 0xec4899, true]); // Koruma Bariyeri Sol
+    B.push([rampX + 16, 25, rampZ + 105, 2, 4, 38, 0xec4899, true]); // Koruma Bariyeri Sağ
+    B.push([rampX, 25, rampZ + 123, 34, 4, 2, 0xec4899, true]); // Koruma Bariyeri Arka
+
+    // 3. NETHER KALESİ VE DİKEY PARKUR KULESİ (Nether Fortress & Spiral Tower)
+    const nX = 180, nZ = -40;
+    // Ana Nether Kalesi Monoliti (Y=46 Yüksekliğinde)
+    B.push([nX, 0, nZ, 18, 46, 18, 0x450a0a, false]);
+    // Kale Zirve Tacı ve Gözlem Güvertesi
+    B.push([nX, 46, nZ, 26, 2.5, 26, 0x7f1d1d, false]);
+    B.push([nX, 48.5, nZ, 12, 0.8, 12, 0xf97316, true]); // Zirve Portal Platformu
+    // Spiral Parkur Basamakları (Dönen Merdiven Pisti)
+    const spiralAngles = [0, 0.8, 1.6, 2.4, 3.2, 4.0, 4.8, 5.6, 6.4, 7.2];
+    spiralAngles.forEach((ang, idx) => {
+      const dist = 14;
+      const sx = nX + Math.cos(ang) * dist;
+      const sz = nZ + Math.sin(ang) * dist;
+      const sy = 3 + idx * 4.2;
+      const isTrampolineStep = (idx === 4 || idx === 8);
+      B.push([sx, sy, sz, 6, 1.2, 6, isTrampolineStep ? 0xa855f7 : 0xfbbf24, true, [0, -ang, 0], isTrampolineStep]);
+    });
+
+    // 4. UÇAN ADALAR & GÖKYÜZÜ KÖPRÜSÜ (Sky Islands & Aerial Skydiving Hub)
+    const skyX = 0, skyZ = 160;
+    B.push([skyX, 36, skyZ, 24, 2.2, 24, 0x065f46, false]); // Ana Uçan Ada 1
+    B.push([skyX, 38.2, skyZ, 12, 0.6, 12, 0x34d399, true]); // Zemin Portal Yuvası
+    B.push([skyX - 45, 44, skyZ + 20, 20, 2.2, 20, 0x065f46, false]); // Uçan Ada 2 (Batı)
+    B.push([skyX - 45, 46.2, skyZ + 20, 8, 0.6, 8, 0xa855f7, true, [0, 0, 0], true]); // Havada Süper Trambolin
+    B.push([skyX + 45, 48, skyZ + 20, 22, 2.2, 22, 0x065f46, false]); // Uçan Ada 3 (Doğu)
+    B.push([skyX + 45, 50.2, skyZ + 20, 10, 0.6, 10, 0x38bdf8, true]); // Yüksek Atlama Alanı
+    // Bağlantı Gökyüzü Köprüleri
+    B.push([skyX - 22, 40, skyZ + 10, 24, 0.8, 4, 0x047857, false, [0.18, 0.4, 0]]);
+    B.push([skyX + 22, 42, skyZ + 10, 24, 0.8, 4, 0x047857, false, [-0.22, -0.4, 0]]);
+
+    // Harita Dış Sınır Duvarları
+    B.push([0, 0, -300, 600, 24, 4, 0x111827, false]);
+    B.push([0, 0, 300, 600, 24, 4, 0x111827, false]);
+    B.push([-300, 0, 0, 4, 24, 600, 0x111827, false]);
+    B.push([300, 0, 0, 4, 24, 600, 0x111827, false]);
+
+    B.forEach((b) => addStaticBlock(b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7] || false, b[8] || [0, 0, 0], b[9] || false));
   })();
  
   function findClosestWallBody(pos, norm, wallIdx = -1, propId = null) {
@@ -1729,24 +1804,28 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     if (!srcP || !dstP) return inYaw;
     const isSrcFloor = srcP.normal.y > 0.6;
     const isDstFloor = dstP.normal.y > 0.6;
+    const isDstCeil = dstP.normal.y < -0.6;
     const isDstWall = Math.abs(dstP.normal.y) <= 0.6;
 
     if (isDstWall) {
+      // Çıkış portalı duvardaysa: Karakter daima duvardan dışarı doğru (dstP.normal yönünde) baksın
       const outDir = new THREE.Vector3(dstP.normal.x, 0, dstP.normal.z).normalize();
-      if (!isSrcFloor) {
-        const inLook = new THREE.Vector3(-Math.sin(inYaw), 0, -Math.cos(inYaw));
-        const transformedLook = transformVecBetweenPortals(inLook, srcP, dstP);
-        if (Math.hypot(transformedLook.x, transformedLook.z) > 0.05) {
-          return Math.atan2(-transformedLook.x, -transformedLook.z);
-        }
-      }
       return Math.atan2(-outDir.x, -outDir.z);
     }
 
     if (isDstFloor) {
-      const forward = dstP.upVec ? new THREE.Vector3(dstP.upVec.x, 0, dstP.upVec.z).normalize() : new THREE.Vector3(0, 0, -1);
-      if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
-      return Math.atan2(-forward.x, -forward.z);
+      // Çıkış portalı yerdeyse: Karakter yukarı fırlarken dst portalın referans yönüne veya akışına baksın
+      if (isSrcFloor) {
+        const forward = dstP.upVec ? new THREE.Vector3(dstP.upVec.x, 0, dstP.upVec.z).normalize() : new THREE.Vector3(0, 0, -1);
+        if (forward.lengthSq() > 0.01) return Math.atan2(-forward.x, -forward.z);
+        return inYaw;
+      }
+      const inLook = new THREE.Vector3(-Math.sin(inYaw), 0, -Math.cos(inYaw));
+      const transformedLook = transformVecBetweenPortals(inLook, srcP, dstP);
+      if (Math.hypot(transformedLook.x, transformedLook.z) > 0.05) {
+        return Math.atan2(-transformedLook.x, -transformedLook.z);
+      }
+      return inYaw;
     }
 
     const outDir = dstP.normal.clone().negate();
@@ -1760,14 +1839,16 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     camera.getWorldPosition(_pCamWorldPos);
     camera.getWorldQuaternion(_pCamQuat);
     const pr = renderer.getPixelRatio();
- 
+
     const prevFgVis = fingerGunGroup.visible;
     const prevGhostVis = ghostMesh.visible;
     const prevLocalRigVis = localRig.root.visible;
     fingerGunGroup.visible = false;
     ghostMesh.visible = false;
-    localRig.root.visible = true;
- 
+    // SADECE oyuncu normal karakter modundaysa ve araba/ragdoll/marble modunda değilse portal dokusunda göster
+    const canShowRig = !drivingCar && !isShatteredLocal && !marbleMode;
+    localRig.root.visible = canShowRig;
+
     for (const ownerId in playerPortals) {
       const pair = playerPortals[ownerId];
       if (!pair) continue;
@@ -1775,7 +1856,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       pair.blue.surfaceMat.uniforms.uLinked.value = linked;
       pair.orange.surfaceMat.uniforms.uLinked.value = linked;
       if (!linked) continue;
- 
+
       if (_pCamWorldPos.distanceTo(pair.blue.pos) < 130 || _pCamWorldPos.distanceTo(pair.orange.pos) < 130) {
         pair.blue.surfaceMat.uniforms.uResolution.value.set(innerWidth * pr, innerHeight * pr);
         pair.orange.surfaceMat.uniforms.uResolution.value.set(innerWidth * pr, innerHeight * pr);
@@ -1783,10 +1864,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         renderSinglePortalView(pair.orange, pair.blue);
       }
     }
- 
+
     fingerGunGroup.visible = prevFgVis;
     ghostMesh.visible = prevGhostVis;
-    localRig.root.visible = prevLocalRigVis;
+    localRig.root.visible = prevLocalRigVis && canShowRig;
   }
  
   function renderSinglePortalView(srcPortal, dstPortal) {
@@ -2070,6 +2151,12 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   marbleMesh.castShadow = true; marbleMesh.visible = false; scene.add(marbleMesh);
   function setLocalMarbleColor() { marbleMesh.material.map.dispose(); marbleMesh.material.dispose(); marbleMesh.material = makeMarbleMat('#00aaaa'); }
   function applyCameraRig() {
+    if (localRig && localRig.root) {
+      localRig.root.visible = thirdPerson && !drivingCar && !marbleMode && !isShatteredLocal;
+    }
+    if (localPortalCloneRig && localPortalCloneRig.root) {
+      localPortalCloneRig.root.visible = false;
+    }
     if (marbleMode) { camera.position.set(0, 1.5 * playerScale, 7 * playerScale); pitchObj.position.set(0, 0.3 * playerScale, 0); }
     else if (thirdPerson) { camera.position.set(0, 1.1 * playerScale, 4.8 * playerScale); pitchObj.position.set(0, 1.35 * playerScale, 0); }
     else { camera.position.set(0, 0, 0); pitchObj.position.set(0, 1.25 * playerScale, 0); }
@@ -2167,6 +2254,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   function enterCar(car) {
     if (marbleMode) setMarble(false);
     car.driverId = _uid; drivingCar = car;
+    // Araba modunda 1. karakter modelini kesinlikle gizle
+    if (localRig && localRig.root) localRig.root.visible = false;
+    if (localPortalCloneRig && localPortalCloneRig.root) localPortalCloneRig.root.visible = false;
     world.removeBody(playerBody);
     const b = car.body;
     b.type = CANNON.Body.DYNAMIC; b.mass = 150; b.updateMassProperties();
@@ -2186,7 +2276,11 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     car.driverId = null; drivingCar = null;
     playerBody.position.set(b.position.x - 2.8 * (car.scaleFactor || 1), b.position.y + 0.5, b.position.z);
     playerBody.velocity.set(0, 0, 0);
-    world.addBody(playerBody); applyCameraRig();
+    world.addBody(playerBody);
+    applyCameraRig();
+    if (localRig && localRig.root) {
+      localRig.root.visible = thirdPerson && !marbleMode && !isShatteredLocal;
+    }
     sendCarState(car); syncPlayerState(true);
   }
   function handleInteractKey() {
@@ -2962,6 +3056,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   function startLocalRagdoll(dir, extra, autoRespawn) {
     if (isShatteredLocal || !isPlaying) return;
     isShatteredLocal = true; ragdollStart = Date.now();
+    // Ragdoll modunda 1. karakter modelini kesinlikle gizle
+    if (localRig && localRig.root) localRig.root.visible = false;
+    if (localPortalCloneRig && localPortalCloneRig.root) localPortalCloneRig.root.visible = false;
     const p = playerBody.position;
     localRagdoll = spawnRagdoll({ x: p.x, y: p.y - playerRadius, z: p.z }, yawObj.rotation.y, myColor, dir, Infinity, extra);
     if (world.bodies.includes(playerBody)) world.removeBody(playerBody);
@@ -3537,18 +3634,27 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         });
  
         const isFloorRag = srcP.normal.y > 0.6;
+        // Yerdeki portala düşen veya kayan ragdoll için hatasız geçiş
         const halfCrossedRag = isFloorRag
-          ? (tPos.y <= srcP.pos.y + 0.08 && r.portalCd <= 0)
+          ? (tPos.y <= srcP.pos.y + 0.65 && r.portalCd <= 0)
           : ((normalDist <= 0.03 || (normalDist <= 0.08 && movingIn)) && r.portalCd <= 0);
         if (halfCrossedRag) seamlessTeleportRagdoll(r, srcP, dstP);
       }
       if (r.life !== Infinity && (r.life -= dt) <= 0) removeRagdoll(r);
     }
- 
+
+    // Ragdoll veya Araba modundayken 1. karakter modelini kesinlikle gizle
+    if (drivingCar || isShatteredLocal || marbleMode) {
+      if (localRig && localRig.root) localRig.root.visible = false;
+      if (localPortalCloneRig && localPortalCloneRig.root) localPortalCloneRig.root.visible = false;
+    }
+
     if (localRagdoll) { playerObj.position.copy(localRagdoll.torso.position); syncPlayerState(); }
- 
+
     if (isPlaying && !isShatteredLocal) {
       if (drivingCar) {
+        if (localRig && localRig.root) localRig.root.visible = false;
+        if (localPortalCloneRig && localPortalCloneRig.root) localPortalCloneRig.root.visible = false;
         vehiclePrompt.classList.remove('hidden');
         vehiclePrompt.innerText = `Sürüş — İn: [${keybinds.interactCar.toUpperCase()}] | Portallardan Araba ile Geçebilirsiniz!`;
         playerObj.position.copy(drivingCar.body.position); syncPlayerState();
@@ -3556,73 +3662,84 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         if (playerBody.position.y < -30) { playerBody.position.set(0, 15, 8); playerBody.velocity.set(0, 0, 0); }
         if (playerBody.velocity.y < -45) playerBody.velocity.y = -45;
         playerObj.position.copy(playerBody.position);
- 
+
         const moveSpd = Math.hypot(playerBody.velocity.x, playerBody.velocity.z);
-        localRig.root.visible = thirdPerson && !marbleMode;
+        // Sadece 3. şahıs modunda ve araba/ragdoll/marble modunda değilse göster
+        localRig.root.visible = thirdPerson && !marbleMode && !drivingCar && !isShatteredLocal;
         localRig.root.position.set(playerBody.position.x, playerBody.position.y - playerRadius, playerBody.position.z);
         localRig.root.rotation.y = yawObj.rotation.y;
         if (localArmSwing > 0) localArmSwing = Math.max(0, localArmSwing - dt * 4.5);
         updateRigHeldItems(localRig, FINGER_MODES[fingerModeIdx].id, selectedObj);
         animateMinecraftRig(localRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
- 
+
         localPortalCloneRig.root.visible = false;
         setGroupClippingPlane(localRig.root, []);
- 
+
         const curPlayerPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
         const nearestPortal = findClosestActivePortalPair(curPlayerPos);
-        if (nearestPortal && isInsidePortalAperture(curPlayerPos, nearestPortal.srcP, playerRadius)) {
+        if (nearestPortal && isInsidePortalAperture(curPlayerPos, nearestPortal.srcP, playerRadius * 1.2)) {
           const nearP = nearestPortal.srcP;
           const farP  = nearestPortal.dstP;
           const relVec = curPlayerPos.clone().sub(nearP.pos);
           const normalDist = relVec.dot(nearP.normal);
           const velVec = new THREE.Vector3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
           const movingIntoPortal = velVec.dot(nearP.normal) < -0.02;
- 
+
           setGroupClippingPlane(localRig.root, [nearP.clipPlane]);
           setGroupClippingPlane(localPortalCloneRig.root, [farP.clipPlane]);
- 
+
           const previewRatio = getPortalEffectiveScale(farP) / getPortalEffectiveScale(nearP);
           const nextScale = Math.max(0.25, Math.min(4.5, playerScale * previewRatio));
           localPortalCloneRig.root.scale.set(nextScale, nextScale, nextScale);
- 
+
           const cloneFootPos = transformPointBetweenPortals(localRig.root.position, nearP, farP);
           localPortalCloneRig.root.position.copy(cloneFootPos);
-          // Yerdeki portaldan girerken preview modeli cikis portalinin rotasyonuyla tam senkronize
+
+          // Yerdeki portaldan girerken preview modeli çıkış portalının rotasyonuyla TAM SENKRONİZE
           const exitYaw = getPortalExitYaw(nearP, farP, yawObj.rotation.y);
-          localPortalCloneRig.root.rotation.y = exitYaw;
+          localPortalCloneRig.root.rotation.set(0, exitYaw, 0);
+
           updateRigHeldItems(localPortalCloneRig, FINGER_MODES[fingerModeIdx].id, selectedObj);
           animateMinecraftRig(localPortalCloneRig, moveSpd, dt, localArmSwing, pitchObj.rotation.x);
-          localPortalCloneRig.root.visible = true;
+          localPortalCloneRig.root.visible = thirdPerson && !drivingCar && !marbleMode && !isShatteredLocal;
 
-          // Portal oyunundaki gibi: Karakter portala girerken clipping planes ile yarısı kesilir,
-          // ve tam yarısından geçince (gövde merkezi portal düzlemini kestiğinde) ışınlanma gerçekleşir.
+          // Portal oyunundaki gibi: Karakter portala girerken clipping planes ile kesilir,
+          // ve tam yarısından geçince (gövde merkezi portal düzlemini kestiğinde) pürüzsüz ışınlanma gerçekleşir.
           const isFloor = nearP.normal.y > 0.6;
           const isCeil  = nearP.normal.y < -0.6;
           let shouldTeleport = false;
 
           if (isFloor) {
-            // Yerdeki portal: Açıklık içindeyken ayaklar portala bastığında delik gibi içine batmasını sağla
+            // Yerdeki portal: Açıklık içindeyken ayaklar portala bastığında veya içine adım attığında
             const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
             const centerDist = curPlayerPos.y - nearP.pos.y;
-            if (feetDist <= 0.15 && feetDist >= -1.2 * playerScale) {
-              // Ayaklar portal yüzeyine bastığında yerçekimiyle deliğe batış hissi
-              playerBody.velocity.y = Math.min(playerBody.velocity.y, -3.8);
-              if (centerDist > 0.05) playerBody.position.y -= dt * 2.5;
+
+            // Ayaklar portal yüzeyine bastığında yerçekimi ve çekimle deliğe batış hissi
+            if (feetDist <= 0.35 * playerScale && feetDist >= -1.5 * playerScale) {
+              playerBody.velocity.y = Math.min(playerBody.velocity.y, -4.5);
+              if (centerDist > 0.35 * playerScale) {
+                playerBody.position.y -= Math.max(0.08, dt * 6.0);
+              }
             }
-            // Tam yarısından geçince ışınlanma: Karakterin bel/merkez noktası portal zemin düzlemine indiğinde (50% geçiş)
-            if (centerDist <= 0.08 * playerScale && portalCooldown <= 0) {
+
+            // Portal oyunundaki gibi: Yarıdan geçiş kriteri (bacaklar portal deliğine girdiğinde veya merkez indiğinde)
+            const insideTight = isInsidePortalAperture(curPlayerPos, nearP, 0.15 * playerScale);
+            const halfCrossed = (centerDist <= 0.52 * playerScale) ||
+                                (insideTight && centerDist <= 0.78 * playerScale && playerBody.velocity.y <= -0.1) ||
+                                (insideTight && feetDist <= 0.08);
+
+            if (halfCrossed && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else if (isCeil) {
             // Tavandaki portal: Karakter yukarı zıpladığında tam yarısı (merkezi) tavan düzlemini geçtiğinde ışınlar
             const centerDist = nearP.pos.y - curPlayerPos.y;
-            if (centerDist <= 0.08 * playerScale && portalCooldown <= 0) {
+            if (centerDist <= 0.25 * playerScale && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           } else {
-            // Duvardaki portal: Karakter portalın içine doğru adım atar, gövdesinin ön yarısı kırpılır
-            // ve tam yarısı (gövde merkezi / kamera ekseni) portal düzlemini aştığında (normalDist <= 0.02) ışınlar.
-            const halfCrossed = (normalDist <= 0.02) || (normalDist <= 0.07 && movingIntoPortal);
+            // Duvardaki portal: Karakter portalın içine adım atar ve tam yarısı (gövde merkezi) portal düzlemini aştığında ışınlar
+            const halfCrossed = (normalDist <= 0.03) || (normalDist <= 0.12 && movingIntoPortal);
             if (halfCrossed && portalCooldown <= 0) {
               shouldTeleport = true;
             }
@@ -3702,8 +3819,8 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
  
         const isFloorCar = srcP.normal.y > 0.6;
         const halfCrossedCar = isFloorCar
-          ? (cPos.y <= srcP.pos.y + 0.15 && c.portalCd <= 0)
-          : ((normalDist <= 0.04 || (normalDist <= 0.12 && movingIn)) && c.portalCd <= 0);
+          ? (cPos.y <= srcP.pos.y + 1.25 * (c.scaleFactor || 1) && c.portalCd <= 0)
+          : ((normalDist <= 0.06 || (normalDist <= 0.22 && movingIn)) && c.portalCd <= 0);
         if (halfCrossedCar) seamlessTeleportCar(c, srcP, dstP);
       }
     }
@@ -3746,8 +3863,8 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
  
         const isFloorProp = srcP.normal.y > 0.6;
         const halfCrossedProp = isFloorProp
-          ? (pos.y <= srcP.pos.y + 0.06 && p.portalCd <= 0)
-          : ((normalDist <= 0.03 || (normalDist <= 0.08 && (movingIn || grabbedProp === p))) && p.portalCd <= 0);
+          ? (pos.y <= srcP.pos.y + p.boundR * 1.25 && p.portalCd <= 0)
+          : ((normalDist <= 0.04 || (normalDist <= 0.12 && (movingIn || grabbedProp === p))) && p.portalCd <= 0);
         if (halfCrossedProp) seamlessTeleportProp(p, srcP, dstP);
       }
     }
