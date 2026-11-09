@@ -1199,6 +1199,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   // HARİTA VE STATİK BLOKLAR
   const intersectableObjects = [];
   const staticMapEntries = [];
+  let mainFloorBody = null;
  
   function createCheckerboard() {
     const c = _d.createElement('canvas'); c.width = c.height = 512;
@@ -1240,6 +1241,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     fb.isFloor = true;
     fb.addShape(new CANNON.Box(new CANNON.Vec3(300, 1, 300)));
     fb.position.set(0, -1, 0); syncBodyAABB(fb); world.addBody(fb);
+    mainFloorBody = fb;
  
     const B = [];
     B.push([0, 0, 0, 20, 2, 20, 0x333333, false]);
@@ -1364,17 +1366,30 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   })();
  
   function findClosestWallBody(pos, norm, wallIdx = -1, propId = null) {
-    if (wallIdx >= 0 && staticMapEntries[wallIdx] && !staticMapEntries[wallIdx].isFloor) return staticMapEntries[wallIdx].body;
+    if (wallIdx >= 0 && staticMapEntries[wallIdx]) return staticMapEntries[wallIdx].body;
     if (propId && activeProps[propId]) return activeProps[propId].body;
     const probeStart = pos.clone().addScaledVector(norm, 0.35);
     const probeDir = norm.clone().negate();
-    const rc = new THREE.Raycaster(probeStart, probeDir, 0, 1.5);
+    const rc = new THREE.Raycaster(probeStart, probeDir, 0, 1.8);
     const hit = rc.intersectObjects(intersectableObjects, false)[0];
     if (hit && hit.object.userData) {
       const wIdx = hit.object.userData.wallIdx;
-      if (wIdx !== undefined && wIdx >= 0 && staticMapEntries[wIdx] && !staticMapEntries[wIdx].isFloor) return staticMapEntries[wIdx].body;
+      if (wIdx !== undefined && wIdx >= 0 && staticMapEntries[wIdx]) return staticMapEntries[wIdx].body;
+      if (wIdx === -1) return mainFloorBody;
     }
+    if (Math.abs(norm.y) > 0.7 && Math.abs(pos.y) <= 0.6) return mainFloorBody;
     return null;
+  }
+
+  function isWallBodyUsedByOtherPortal(targetBody, excludePortal = null) {
+    if (!targetBody || targetBody === mainFloorBody) return false;
+    for (const oId in playerPortals) {
+      const pair = playerPortals[oId];
+      if (!pair) continue;
+      if (pair.blue && pair.blue.active && pair.blue !== excludePortal && pair.blue.wallBody === targetBody) return true;
+      if (pair.orange && pair.orange.active && pair.orange !== excludePortal && pair.orange.wallBody === targetBody) return true;
+    }
+    return false;
   }
  
   // PORTAL SİSTEMİ (Ayrı X/Y & Boyut Orantısı)
@@ -1470,7 +1485,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       group: g, inner, surfaceMat, rt, cam, hexColor, clipPlane, labelTex,
       active: false, scale: 1.5, scaleX: 1.5, scaleY: 1.5,
       pos: new THREE.Vector3(), normal: new THREE.Vector3(0, 0, 1),
-      wallBody: null, wallIdx: -1
+      wallBody: null, wallIdx: -1, behindDepth: 0.75
     };
   }
  
@@ -1489,7 +1504,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     if (!pair) return;
     [pair.blue, pair.orange].forEach((p) => {
       if (!p) return;
-      if (p.wallBody) p.wallBody.collisionResponse = true;
+      if (p.wallBody && !isWallBodyUsedByOtherPortal(p.wallBody, p)) {
+        p.wallBody.collisionResponse = true;
+      }
       scene.remove(p.group);
       p.rt.dispose();
       p.surfaceMat.dispose();
@@ -1499,7 +1516,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   }
  
   function applyPortalTransform(p, px, py, pz, nx, ny, nz, wallIdx = -1, propId = null, sx = null, sy = null, ux = null, uy = null, uz = null) {
-    if (p.wallBody) p.wallBody.collisionResponse = true;
+    const oldWallBody = p.wallBody;
     const defX = p.isOrange ? orangeScaleX : blueScaleX;
     const defY = p.isOrange ? orangeScaleY : blueScaleY;
     p.scaleX = Math.max(0.4, Math.min(5.0, sx !== null && sx !== undefined ? sx : defX));
@@ -1525,6 +1542,14 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     // Portal düzlemini ve kırpma düzlemini tam yüzeye oturt (blok arkası oyuk görünümü için)
     p.clipPlane.setFromNormalAndCoplanarPoint(p.normal, p.pos.clone().addScaledVector(p.normal, -0.02));
     p.wallBody = findClosestWallBody(p.pos, p.normal, wallIdx, propId);
+    if (oldWallBody && oldWallBody !== p.wallBody && !isWallBodyUsedByOtherPortal(oldWallBody, p)) {
+      oldWallBody.collisionResponse = true;
+    }
+    // Kullanıcı isteği: Portal koyulduğu anda arkasının collision'ı kapansın
+    if (p.wallBody && p.wallBody !== mainFloorBody) {
+      p.wallBody.collisionResponse = false;
+    }
+    p.behindDepth = 0.75;
     p.wallIdx = wallIdx;
     p.group.visible = true;
     p.active = true;
@@ -3304,6 +3329,57 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     const normEllipse = (localPt.x * localPt.x) / (rx * rx) + (localPt.y * localPt.y) / (ry * ry);
     return normEllipse <= 1.0;
   }
+
+  // Portal arkasındaki yerin (0.75m derinlik) collision'ını kapatan ve delikten serbest geçiş sağlayan filtre
+  function shouldSuppressPortalContact(entityBody, surfaceBody) {
+    if (!surfaceBody || !entityBody) return false;
+    const isSurface = (surfaceBody === mainFloorBody || surfaceBody.isFloor || surfaceBody.mass === 0);
+    if (!isSurface) return false;
+
+    const entRadius = entityBody.boundingRadius ||
+      (entityBody.shapes && entityBody.shapes[0] && (entityBody.shapes[0].boundingSphereRadius || entityBody.shapes[0].radius)) ||
+      (entityBody === playerBody ? playerRadius : 0.8);
+
+    for (const ownerId in playerPortals) {
+      const pair = playerPortals[ownerId];
+      if (!pair) continue;
+      const portals = [pair.blue, pair.orange];
+      for (let pi = 0; pi < portals.length; pi++) {
+        const portal = portals[pi];
+        if (!portal || !portal.active) continue;
+
+        const isThisPortalSurface = (portal.wallBody === surfaceBody) || (surfaceBody === mainFloorBody && Math.abs(portal.normal.y) > 0.6);
+        if (!isThisPortalSurface) continue;
+
+        const ePos = new THREE.Vector3(entityBody.position.x, entityBody.position.y, entityBody.position.z);
+        const effScale = portal.scale || 1.5;
+        if (!isInsidePortalAperture(ePos, portal, 0.45 * effScale)) continue;
+
+        const rel = ePos.clone().sub(portal.pos);
+        const normalDist = rel.dot(portal.normal);
+
+        // Kullanıcı isteği: Portalın arkasındaki yer (0.75m geri) collision'ı olmasın
+        // Nesne portal ağzındayken ve arkasındaki 0.75m oyuk derinliğine batarken temas kuvveti üretilmesin
+        if (normalDist >= -0.85 - entRadius && normalDist <= entRadius + 0.25) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  const origCollisionPairs = world.broadphase.collisionPairs.bind(world.broadphase);
+  world.broadphase.collisionPairs = function(w, p1, p2) {
+    origCollisionPairs(w, p1, p2);
+    for (let j = p1.length - 1; j >= 0; j--) {
+      const bA = p1[j];
+      const bB = p2[j];
+      if (shouldSuppressPortalContact(bA, bB) || shouldSuppressPortalContact(bB, bA)) {
+        p1.splice(j, 1);
+        p2.splice(j, 1);
+      }
+    }
+  };
  
   function seamlessTeleportPlayer(srcPortal, dstPortal) {
     const scaleRatio = getPortalEffectiveScale(dstPortal) / getPortalEffectiveScale(srcPortal);
@@ -3602,36 +3678,18 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       if (activeProps[id].body) activeProps[id].body.collisionResponse = true;
     }
  
-    const pPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+    // Kullanıcı isteği: Portal koyulduğu anda arkasının collision'ı kapansın
+    // Aktif portalların arkasındaki duvar veya platform bloğunun çarpışması daima KAPALI kalır
     for (const ownerId in playerPortals) {
       const pair = playerPortals[ownerId];
-      if (!pair || !pair.blue.active || !pair.orange.active) continue;
+      if (!pair) continue;
       [pair.blue, pair.orange].forEach((portal) => {
-        if (!portal.wallBody) portal.wallBody = findClosestWallBody(portal.pos, portal.normal, portal.wallIdx);
-        if (!portal.wallBody) return;
-
-        // Portala temas ve arkasındaki oyuğa girme kontrolü
- 
-        let inMouth = (!drivingCar && !isShatteredLocal && isInsidePortalAperture(pPos, portal, playerRadius));
-        if (!inMouth) {
-          for (const cid in activeCars) {
-            const cPos = new THREE.Vector3(activeCars[cid].body.position.x, activeCars[cid].body.position.y, activeCars[cid].body.position.z);
-            if (isInsidePortalAperture(cPos, portal, 2.6 * (activeCars[cid].scaleFactor || 1))) { inMouth = true; break; }
+        if (portal && portal.active) {
+          if (!portal.wallBody) portal.wallBody = findClosestWallBody(portal.pos, portal.normal, portal.wallIdx);
+          if (portal.wallBody && portal.wallBody !== mainFloorBody) {
+            portal.wallBody.collisionResponse = false;
           }
         }
-        if (!inMouth) {
-          for (let ri = 0; ri < ragdolls.length; ri++) {
-            const rPos = new THREE.Vector3(ragdolls[ri].torso.position.x, ragdolls[ri].torso.position.y, ragdolls[ri].torso.position.z);
-            if (isInsidePortalAperture(rPos, portal, 1.4)) { inMouth = true; break; }
-          }
-        }
-        if (!inMouth) {
-          for (const id in activeProps) {
-            const pr = activeProps[id];
-            if (!pr.isStatic && isInsidePortalAperture(pr.mesh.position, portal, pr.boundR)) { inMouth = true; break; }
-          }
-        }
-        if (inMouth) portal.wallBody.collisionResponse = false;
       });
     }
  
@@ -3667,9 +3725,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         });
  
         const isFloorRag = srcP.normal.y > 0.6;
-        // Yerdeki portala düşen veya kayan ragdoll için hatasız geçiş
+        // Yerdeki portal: Ragdoll gövdesinin/yüksekliğinin yarısı portal düzlemine girdiğinde ışınlan
         const halfCrossedRag = isFloorRag
-          ? (tPos.y <= srcP.pos.y + 0.65 && r.portalCd <= 0)
+          ? (tPos.y <= srcP.pos.y + 0.1 && r.portalCd <= 0)
           : ((normalDist <= 0.03 || (normalDist <= 0.08 && movingIn)) && r.portalCd <= 0);
         if (halfCrossedRag) seamlessTeleportRagdoll(r, srcP, dstP);
       }
@@ -3743,24 +3801,20 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
           let shouldTeleport = false;
 
           if (isFloor) {
-            // Yerdeki portal: Açıklık içindeyken ayaklar portala bastığında veya içine adım attığında
-            const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
+            // Yerdeki portal: içine giren şeyin yüksekliğinin yarısı girdiğinde tplensin
+            // Oyuncunun tam boyu 1.6 * playerScale, gövde merkezi (bel) playerBody.position.y seviyesindedir.
+            // Gövde merkezi yer portalı yüzeyine (nearP.pos.y) ulaştığında tam yarısı girmiş olur.
             const centerDist = curPlayerPos.y - nearP.pos.y;
+            const feetDist = (curPlayerPos.y - playerRadius) - nearP.pos.y;
 
-            // Ayaklar portal yüzeyine bastığında yerçekimi ve çekimle deliğe batış hissi
-            if (feetDist <= 0.35 * playerScale && feetDist >= -1.5 * playerScale) {
+            // Portal açıklığı içindeyken portal oyuğuna (0.75m derinliğe) doğal batış hissi
+            if (centerDist > 0 && centerDist <= 1.0 * playerScale) {
               playerBody.velocity.y = Math.min(playerBody.velocity.y, -4.5);
-              if (centerDist > 0.35 * playerScale) {
-                playerBody.position.y -= Math.max(0.08, dt * 6.0);
-              }
+              playerBody.position.y -= Math.max(0.04, dt * 5.0);
             }
 
-            // Portal oyunundaki gibi: Yarıdan geçiş kriteri (bacaklar portal deliğine girdiğinde veya merkez indiğinde)
-            const insideTight = isInsidePortalAperture(curPlayerPos, nearP, 0.15 * playerScale);
-            const halfCrossed = (centerDist <= 0.52 * playerScale) ||
-                                (insideTight && centerDist <= 0.78 * playerScale && playerBody.velocity.y <= -0.1) ||
-                                (insideTight && feetDist <= 0.08);
-
+            // Tam yüksekliğin yarısı portal düzlemine girdiğinde (centerDist <= 0.05 * playerScale) ışınlan
+            const halfCrossed = (centerDist <= 0.05 * playerScale) || (feetDist <= -0.70 * playerScale);
             if (halfCrossed && portalCooldown <= 0) {
               shouldTeleport = true;
             }
@@ -3859,8 +3913,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         c.portalClone.visible = true;
  
         const isFloorCar = srcP.normal.y > 0.6;
+        // Yerdeki portal: Araba yüksekliğinin yarısı portal düzlemine girdiğinde ışınlan
         const halfCrossedCar = isFloorCar
-          ? (cPos.y <= srcP.pos.y + 1.25 * (c.scaleFactor || 1) && c.portalCd <= 0)
+          ? (cPos.y <= srcP.pos.y + 0.15 * (c.scaleFactor || 1) && c.portalCd <= 0)
           : ((normalDist <= 0.06 || (normalDist <= 0.22 && movingIn)) && c.portalCd <= 0);
         if (halfCrossedCar) seamlessTeleportCar(c, srcP, dstP);
       }
@@ -3903,8 +3958,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
         }
  
         const isFloorProp = srcP.normal.y > 0.6;
+        // Yerdeki portal: Eşya yüksekliğinin/çapının yarısı portal düzlemine girdiğinde ışınlan
         const halfCrossedProp = isFloorProp
-          ? (pos.y <= srcP.pos.y + p.boundR * 1.25 && p.portalCd <= 0)
+          ? (pos.y <= srcP.pos.y + 0.08 && p.portalCd <= 0)
           : ((normalDist <= 0.04 || (normalDist <= 0.12 && (movingIn || grabbedProp === p))) && p.portalCd <= 0);
         if (halfCrossedProp) seamlessTeleportProp(p, srcP, dstP);
       }
