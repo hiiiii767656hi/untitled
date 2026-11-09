@@ -84,6 +84,7 @@ function carPublic(c) {
     color: c.color,
     driverId: c.driverId || '',
     steerAngle: c.steerAngle || 0,
+    wheelSpin: c.wheelSpin || 0,
     scaleFactor: c.scaleFactor || 1.0,
     x: c.x,
     y: c.y,
