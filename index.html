@@ -1434,11 +1434,22 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     inner.scale.set(0.92, 1.42, 1);
     g.add(inner);
  
-    const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(1.41, 1.41, 0.55, 32, 1, true), new THREE.MeshBasicMaterial({ color: hexColor, side: THREE.BackSide, transparent: true, opacity: 0.45 }));
+    // Portalların arkasındaki bloğu kesilmiş gibi gösteren Portal Derinlik Tüneli ve Karanlık Boşluk (Wall Cavity / Pocket)
+    const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(1.41, 1.41, 1.45, 32, 1, true), new THREE.MeshStandardMaterial({
+      color: 0x050510, roughness: 0.9, metalness: 0.1, side: THREE.BackSide
+    }));
     tunnel.rotation.x = Math.PI / 2;
     tunnel.scale.set(0.92, 1.42, 1);
-    tunnel.position.z = -0.22;
+    tunnel.position.z = -0.68;
     g.add(tunnel);
+
+    // Duvarın/zeminin arkasını tamamen oyuk ve derin gösteren arka kapak diski (Cavity Backplate)
+    const cavityBack = new THREE.Mesh(new THREE.CircleGeometry(1.41, 32), new THREE.MeshBasicMaterial({
+      color: 0x020208, side: THREE.FrontSide
+    }));
+    cavityBack.scale.set(0.92, 1.42, 1);
+    cavityBack.position.z = -1.40;
+    g.add(cavityBack);
  
     const canvas = _d.createElement('canvas'); canvas.width = 256; canvas.height = 48;
     const ctx = canvas.getContext('2d');
@@ -1511,7 +1522,8 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     p.group.lookAt(p.pos.clone().add(p.normal));
     p.group.updateMatrixWorld();
 
-    p.clipPlane.setFromNormalAndCoplanarPoint(p.normal, p.pos.clone().addScaledVector(p.normal, -0.04));
+    // Portal düzlemini ve kırpma düzlemini tam yüzeye oturt (blok arkası oyuk görünümü için)
+    p.clipPlane.setFromNormalAndCoplanarPoint(p.normal, p.pos.clone().addScaledVector(p.normal, -0.02));
     p.wallBody = findClosestWallBody(p.pos, p.normal, wallIdx, propId);
     p.wallIdx = wallIdx;
     p.group.visible = true;
@@ -1661,11 +1673,12 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     return bestSrc ? { srcP: bestSrc, dstP: bestDst, dist: minDist } : null;
   }
  
-    // PORTAL SESİ, SMOOTH WARP EFEKTİ VE BAĞLANTI KESİLME YÖNETİMİ
+    // PORTAL SESİ, SMOOTH WARP EFEKTİ, PORTAL OYUNU KAMERA DÖNÜŞÜ (ROLL) VE BAĞLANTI KESİLME YÖNETİMİ
   let portalFovBoost = 0;
   let exitPortalClipTimer = 0;
   let lastExitPortal = null;
   let _portalAudioCtx = null;
+  let portalCameraRoll = 0; // Portal oyunundaki gibi yer-duvar geçişinde kamerayı dinamik döndüren roll açısı
 
   function getPortalAudioContext() {
     if (!_portalAudioCtx) {
@@ -1804,11 +1817,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     if (!srcP || !dstP) return inYaw;
     const isSrcFloor = srcP.normal.y > 0.6;
     const isDstFloor = dstP.normal.y > 0.6;
-    const isDstCeil = dstP.normal.y < -0.6;
     const isDstWall = Math.abs(dstP.normal.y) <= 0.6;
 
     if (isDstWall) {
-      // Çıkış portalı duvardaysa: Karakter daima duvardan dışarı doğru (dstP.normal yönünde) baksın
+      // Çıkış portalı duvardaysa: Karakter duvardan dışarı doğru (dstP.normal yönünde) baksın
       const outDir = new THREE.Vector3(dstP.normal.x, 0, dstP.normal.z).normalize();
       return Math.atan2(-outDir.x, -outDir.z);
     }
@@ -3333,8 +3345,27 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     }
     playerBody.velocity.set(outVel.x, outVel.y, outVel.z);
 
+    const isSrcFloor = srcPortal.normal.y > 0.6;
+    const isSrcWall  = Math.abs(srcPortal.normal.y) <= 0.6;
     const exitYaw = getPortalExitYaw(srcPortal, dstPortal, yawObj.rotation.y);
     yawObj.rotation.y = exitYaw;
+
+    // Portal oyunundaki gibi: Yer portaldan duvar portalına (veya duvar-yer) geçerken
+    // bakış açısı düzlemi değiştiği için kameranın baş döndürücü 90-180 derece süzülerek toparlanması (Camera Roll)
+    if (isSrcFloor && isDstWall) {
+      // Yere dikey düşüşten duvara fırlayış: Kamera önce ters/yan açıdan başlar ve Portal oyunundaki gibi toparlanır
+      portalCameraRoll = (Math.random() > 0.5 ? 1 : -1) * (0.85 + Math.random() * 0.35);
+      pitchObj.rotation.x = Math.max(-0.25, Math.min(0.25, pitchObj.rotation.x * 0.3));
+    } else if (isSrcWall && isDstFloor) {
+      // Duvardan yer portalına dalış: Kameraya hafif zıplama eğimi
+      portalCameraRoll = (Math.random() > 0.5 ? 1 : -1) * 0.45;
+    } else if (isSrcWall && isDstWall) {
+      // İki duvar portalı arasında hafif roll etkisi
+      const normDot = srcPortal.normal.dot(dstPortal.normal);
+      if (Math.abs(normDot) < 0.7) {
+        portalCameraRoll = (Math.random() > 0.5 ? 1 : -1) * 0.28;
+      }
+    }
 
     // Portal oyunundaki gibi anında pürüzsüz warp/geçiş animasyonu, FOV esnemesi ve ses efekti
     triggerPortalWarpEffect(srcPortal.isOrange);
@@ -3577,7 +3608,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       if (!pair || !pair.blue.active || !pair.orange.active) continue;
       [pair.blue, pair.orange].forEach((portal) => {
         if (!portal.wallBody) portal.wallBody = findClosestWallBody(portal.pos, portal.normal, portal.wallIdx);
-        if (!portal.wallBody || portal.wallBody.isFloor) return;
+        if (!portal.wallBody) return;
+
+        // Portala temas ve arkasındaki oyuğa girme kontrolü
  
         let inMouth = (!drivingCar && !isShatteredLocal && isInsidePortalAperture(pPos, portal, playerRadius));
         if (!inMouth) {
@@ -3738,9 +3771,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
               shouldTeleport = true;
             }
           } else {
-            // Duvardaki portal: Karakter portalın içine adım atar ve tam yarısı (gövde merkezi) portal düzlemini aştığında ışınlar
-            const halfCrossed = (normalDist <= 0.03) || (normalDist <= 0.12 && movingIntoPortal);
-            if (halfCrossed && portalCooldown <= 0) {
+            // Duvardaki portal: Karakter portal açıklığından içeri adım atar, arkasındaki bloğun içine doğru girer,
+            // gövdesi portal düzlemini geçip arkasındaki duvara/oyuğa dokunduğunda (normalDist <= -0.02 veya temas) ışınlanma gerçekleşir
+            const touchedBackWall = (normalDist <= -0.02) || (normalDist <= 0.08 && movingIntoPortal);
+            if (touchedBackWall && portalCooldown <= 0) {
               shouldTeleport = true;
             }
           }
@@ -3763,11 +3797,18 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       }
     }
  
-    // Portal FOV Warp Yaylanması & Çıkış Portal Kırpma Yumuşatması
+    // Portal FOV Warp Yaylanması & Portal Oyunu Kamera Dönüşü (Roll Animation)
     if (portalFovBoost > 0) {
       portalFovBoost = Math.max(0, portalFovBoost - dt * 38.0);
       camera.fov = 75 + portalFovBoost;
       camera.updateProjectionMatrix();
+    }
+    if (Math.abs(portalCameraRoll) > 0.001) {
+      // Portal oyunundaki gibi kamera açısı 90-180 dereceden dik konuma yaylanarak (smooth damping) oturur
+      portalCameraRoll = THREE.MathUtils.damp(portalCameraRoll, 0, 7.5, dt);
+      camera.rotation.z = portalCameraRoll;
+    } else {
+      camera.rotation.z = 0;
     }
     if (exitPortalClipTimer > 0) {
       exitPortalClipTimer = Math.max(0, exitPortalClipTimer - dt);
