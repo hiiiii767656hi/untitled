@@ -927,27 +927,42 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   const flashLight = new THREE.PointLight(0xffff00, 0, 10);
   flashLight.position.set(0, 0, -1); pitchObj.add(flashLight);
  
+  // Three.js r128 uyumlu pürüzsüz üstel sönümleme (exponential damping) yardımcı fonksiyonu
+  function smoothDamp(cur, target, lambda, dt) {
+    const c = Number.isFinite(cur) ? cur : 0;
+    const t = Number.isFinite(target) ? target : 0;
+    const d = Number.isFinite(dt) && dt > 0 ? Math.min(dt, 0.1) : 0.016;
+    return c + (t - c) * (1 - Math.exp(-lambda * d));
+  }
+  if (typeof THREE !== 'undefined') {
+    if (!THREE.MathUtils) THREE.MathUtils = {};
+    if (typeof THREE.MathUtils.damp !== 'function') THREE.MathUtils.damp = smoothDamp;
+  }
+
   // Minecraft Humanoid Rig Yürüme, Nefes Alma & Vuruş (Swing) Animasyonu
   // Not: rotation.x POZİTİF = uzuv ÖNE (-Z) gider. Sağ bacak/kol ters faz ile yürür.
   function animateMinecraftRig(rig, speed, dt, swingVal = 0, pitch = 0) {
-    rig.idlePhase = (rig.idlePhase || 0) + dt * 2.2;
+    if (!rig || !rig.legL || !rig.legR || !rig.armL || !rig.armR) return;
+    const safeDt = Number.isFinite(dt) && dt > 0 ? Math.min(dt, 0.05) : 0.016;
+    const safeSpd = Number.isFinite(speed) ? Math.max(0, speed) : 0;
+    rig.idlePhase = (rig.idlePhase || 0) + safeDt * 2.2;
     const idleBreath = Math.sin(rig.idlePhase) * 0.035;
     const idleSway = Math.cos(rig.idlePhase * 0.7) * 0.025;
 
-    const isMoving = speed > 0.25;
+    const isMoving = safeSpd > 0.25;
     if (isMoving) {
-      rig.walkPhase += dt * Math.min(speed * 0.95, 13.5);
+      rig.walkPhase = (rig.walkPhase || 0) + safeDt * Math.min(safeSpd * 0.95, 13.5);
     } else {
-      rig.walkPhase = THREE.MathUtils.damp(rig.walkPhase || 0, 0, 8, dt);
+      rig.walkPhase = smoothDamp(rig.walkPhase || 0, 0, 8, safeDt);
     }
 
-    const stride = Math.min(1.0, speed / 9.5);
+    const stride = Math.min(1.0, safeSpd / 9.5);
     const s = isMoving ? Math.sin(rig.walkPhase) * stride : 0;
     const c = isMoving ? Math.cos(rig.walkPhase * 2) * stride : 0;
 
     // Bacak salınımı
-    rig.legL.rotation.x = THREE.MathUtils.damp(rig.legL.rotation.x, s * 0.85, 16, dt);
-    rig.legR.rotation.x = THREE.MathUtils.damp(rig.legR.rotation.x, -s * 0.85, 16, dt);
+    rig.legL.rotation.x = smoothDamp(rig.legL.rotation.x, s * 0.85, 16, safeDt);
+    rig.legR.rotation.x = smoothDamp(rig.legR.rotation.x, -s * 0.85, 16, safeDt);
     rig.legL.rotation.z = -0.015;
     rig.legR.rotation.z = 0.015;
 
@@ -955,7 +970,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     // Sol kol (off-hand) ve sağ kol (silah/ana el) doğal yürüyüş + nefes alma salınımı
     const targetArmLX = 0.08 - s * 0.48 + idleBreath;
     const targetArmLZ = -0.05 - Math.abs(idleBreath) * 0.6;
-    rig.armL.rotation.x = THREE.MathUtils.damp(rig.armL.rotation.x, targetArmLX, 16, dt);
+    rig.armL.rotation.x = smoothDamp(rig.armL.rotation.x, targetArmLX, 16, safeDt);
     rig.armL.rotation.y = 0.06 + s * 0.08;
     rig.armL.rotation.z = targetArmLZ;
 
@@ -963,7 +978,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     let targetArmRY = -0.06 - s * 0.08;
     let targetArmRZ = 0.05 + Math.abs(idleBreath) * 0.6;
 
-    const activeSwing = (typeof swingVal === 'number') ? Math.max(0, Math.min(1, swingVal)) : 0;
+    const activeSwing = (typeof swingVal === 'number' && Number.isFinite(swingVal)) ? Math.max(0, Math.min(1, swingVal)) : 0;
     if (activeSwing > 0.01) {
       const punch = Math.sin(activeSwing * Math.PI); // 0 -> 1 -> 0
       targetArmRX = (holding ? 0.48 : 0.06) + punch * 1.25;
@@ -971,9 +986,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       targetArmRZ = 0.05 - punch * 0.18;
     }
 
-    rig.armR.rotation.x = THREE.MathUtils.damp(rig.armR.rotation.x, targetArmRX, 22, dt);
-    rig.armR.rotation.y = THREE.MathUtils.damp(rig.armR.rotation.y, targetArmRY, 22, dt);
-    rig.armR.rotation.z = THREE.MathUtils.damp(rig.armR.rotation.z, targetArmRZ, 22, dt);
+    rig.armR.rotation.x = smoothDamp(rig.armR.rotation.x, targetArmRX, 22, safeDt);
+    rig.armR.rotation.y = smoothDamp(rig.armR.rotation.y, targetArmRY, 22, safeDt);
+    rig.armR.rotation.z = smoothDamp(rig.armR.rotation.z, targetArmRZ, 22, safeDt);
 
     // Elde tutulan silah / eşya kol dönse de yatay ve ileri baksın
     if (rig.weaponSlot) rig.weaponSlot.rotation.x = -rig.armR.rotation.x * 0.85;
@@ -981,7 +996,8 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
 
     // Kafa yukarı/aşağı bakışı ve hafif adım sekmesini takip etsin
     if (rig.headGroup) {
-      rig.headGroup.rotation.x = Math.max(-0.9, Math.min(0.9, pitch * 0.82)) + idleBreath * 0.3;
+      const safePitch = Number.isFinite(pitch) ? pitch : 0;
+      rig.headGroup.rotation.x = Math.max(-0.9, Math.min(0.9, safePitch * 0.82)) + idleBreath * 0.3;
       rig.headGroup.rotation.z = s * 0.04 + idleSway * 0.5;
       rig.headGroup.position.y = 1.95 + Math.abs(c) * 0.035;
     }
@@ -1232,106 +1248,105 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
   const proceduralTexCache = {};
 
   function getProceduralTexture(type, baseHex = 0xffffff, repX = 2, repY = 2) {
-    const key = `${type}_${baseHex}_${Math.round(repX * 10)}_${Math.round(repY * 10)}`;
+    const col = new THREE.Color(baseHex);
+    const hexKey = col.getHexString();
+    const key = `${type}_${hexKey}_${repX === 45 ? 45 : 2}`;
     if (proceduralTexCache[key]) return proceduralTexCache[key];
 
     const c = _d.createElement('canvas');
-    c.width = c.height = 512;
+    c.width = c.height = 256;
     const ctx = c.getContext('2d');
-    const col = new THREE.Color(baseHex);
     const r = Math.round(col.r * 255), g = Math.round(col.g * 255), b = Math.round(col.b * 255);
+    const clampByte = (v) => Math.min(255, Math.max(0, Math.round(v)));
 
     if (type === 'floor_grid') {
       ctx.fillStyle = '#0e1322';
-      ctx.fillRect(0, 0, 512, 512);
-      for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < 8; j++) {
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
           ctx.fillStyle = (i + j) % 2 === 0 ? '#161f35' : '#101729';
           ctx.fillRect(i * 64 + 2, j * 64 + 2, 60, 60);
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.16)';
           ctx.lineWidth = 2;
           ctx.strokeRect(i * 64 + 2, j * 64 + 2, 60, 60);
         }
       }
-      for (let n = 0; n < 2400; n++) {
+      for (let n = 0; n < 450; n++) {
         ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)';
-        ctx.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
+        ctx.fillRect((Math.random() * 256) | 0, (Math.random() * 256) | 0, 2, 2);
       }
     } else if (type === 'asphalt') {
       ctx.fillStyle = `rgb(${Math.max(15, r)},${Math.max(18, g)},${Math.max(25, b)})`;
-      ctx.fillRect(0, 0, 512, 512);
-      for (let n = 0; n < 4500; n++) {
-        const v = (Math.random() - 0.5) * 36;
-        ctx.fillStyle = `rgb(${Math.min(255, Math.max(0, r + v))},${Math.min(255, Math.max(0, g + v))},${Math.min(255, Math.max(0, b + v))})`;
-        ctx.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
+      ctx.fillRect(0, 0, 256, 256);
+      for (let n = 0; n < 800; n++) {
+        const v = (Math.random() - 0.5) * 34;
+        ctx.fillStyle = `rgb(${clampByte(r + v)},${clampByte(g + v)},${clampByte(b + v)})`;
+        ctx.fillRect((Math.random() * 256) | 0, (Math.random() * 256) | 0, 2, 2);
       }
       ctx.strokeStyle = 'rgba(250, 204, 21, 0.35)';
-      ctx.lineWidth = 6;
-      ctx.setLineDash([28, 22]);
-      ctx.beginPath(); ctx.moveTo(256, 0); ctx.lineTo(256, 512); ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.setLineDash([16, 12]);
+      ctx.beginPath(); ctx.moveTo(128, 0); ctx.lineTo(128, 256); ctx.stroke();
       ctx.setLineDash([]);
     } else if (type === 'scifi_panel') {
       ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, 256, 256);
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
-      ctx.lineWidth = 6;
-      for (let x = 0; x <= 512; x += 128) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 512); ctx.stroke(); }
-      for (let y = 0; y <= 512; y += 128) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke(); }
+      ctx.lineWidth = 4;
+      for (let x = 0; x <= 256; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 256); ctx.stroke(); }
+      for (let y = 0; y <= 256; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke(); }
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.lineWidth = 2;
-      for (let x = 0; x < 512; x += 128) {
-        for (let y = 0; y < 512; y += 128) {
-          ctx.strokeRect(x + 8, y + 8, 112, 112);
+      ctx.lineWidth = 1.5;
+      for (let x = 0; x < 256; x += 64) {
+        for (let y = 0; y < 256; y += 64) {
+          ctx.strokeRect(x + 4, y + 4, 56, 56);
           ctx.fillStyle = 'rgba(0,0,0,0.35)';
-          [[16, 16], [112, 16], [16, 112], [112, 112]].forEach(([rx, ry]) => {
-            ctx.beginPath(); ctx.arc(x + rx, y + ry, 3.5, 0, Math.PI * 2); ctx.fill();
+          [[9, 9], [55, 9], [9, 55], [55, 55]].forEach(([rx, ry]) => {
+            ctx.fillRect(x + rx - 2, y + ry - 2, 4, 4);
           });
         }
       }
-      for (let n = 0; n < 1800; n++) {
-        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-        ctx.fillRect(Math.random() * 512, Math.random() * 512, 4, 4);
-      }
     } else if (type === 'bounce_gel') {
       ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 4; i++) {
         for (let j = 0; j < 4; j++) {
-          const cx = i * 128 + 64, cy = j * 128 + 64;
-          const grad = ctx.createRadialGradient(cx, cy, 8, cx, cy, 56);
+          const cx = i * 64 + 32, cy = j * 64 + 32;
+          const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 28);
           grad.addColorStop(0, 'rgba(255,255,255,0.55)');
           grad.addColorStop(0.6, `rgba(${r},${g},${b},0.2)`);
           grad.addColorStop(1, 'rgba(0,0,0,0.35)');
           ctx.fillStyle = grad;
-          ctx.beginPath(); ctx.arc(cx, cy, 54, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cx, cy, 27, 0, Math.PI * 2); ctx.fill();
         }
       }
     } else if (type === 'wood_crate') {
       ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillRect(0, 0, 256, 256);
       ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      for (let y = 0; y < 512; y += 64) ctx.fillRect(0, y, 512, 4);
+      for (let y = 0; y < 256; y += 32) ctx.fillRect(0, y, 256, 3);
       ctx.strokeStyle = 'rgba(40,20,5,0.45)';
-      ctx.lineWidth = 24;
-      ctx.strokeRect(12, 12, 488, 488);
-      ctx.beginPath(); ctx.moveTo(12, 12); ctx.lineTo(500, 500); ctx.moveTo(500, 12); ctx.lineTo(12, 500); ctx.stroke();
+      ctx.lineWidth = 12;
+      ctx.strokeRect(6, 6, 244, 244);
+      ctx.beginPath(); ctx.moveTo(6, 6); ctx.lineTo(250, 250); ctx.moveTo(250, 6); ctx.lineTo(6, 250); ctx.stroke();
     } else if (type === 'brick') {
       ctx.fillStyle = '#334155';
-      ctx.fillRect(0, 0, 512, 512);
-      const rows = 8, cols = 4, bh = 512 / rows, bw = 512 / cols;
+      ctx.fillRect(0, 0, 256, 256);
+      const rows = 8, cols = 4, bh = 256 / rows, bw = 256 / cols;
       for (let row = 0; row < rows; row++) {
         const offX = (row % 2) * (bw / 2);
         for (let colI = -1; colI <= cols; colI++) {
-          const shade = (Math.random() - 0.5) * 28;
-          ctx.fillStyle = `rgb(${Math.min(255, Math.max(0, r + shade))},${Math.min(255, Math.max(0, g + shade))},${Math.min(255, Math.max(0, b + shade))})`;
-          ctx.fillRect(colI * bw + offX + 4, row * bh + 4, bw - 8, bh - 8);
+          const shade = (Math.random() - 0.5) * 26;
+          ctx.fillStyle = `rgb(${clampByte(r + shade)},${clampByte(g + shade)},${clampByte(b + shade)})`;
+          ctx.fillRect(colI * bw + offX + 2, row * bh + 2, bw - 4, bh - 4);
         }
       }
     }
 
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(Math.max(1, repX), Math.max(1, repY));
+    const rep = repX === 45 ? 45 : 2;
+    t.repeat.set(rep, rep);
     proceduralTexCache[key] = t;
     return t;
   }
@@ -1342,9 +1357,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
  
   function addStaticBlock(x, y, z, w, h, d, color, neon = false, rot = [0, 0, 0], isBounce = false) {
     const texType = isBounce ? 'bounce_gel' : (h <= 2.5 && (w >= 12 || d >= 12) ? 'asphalt' : (neon ? 'scifi_panel' : 'brick'));
-    const repU = Math.max(1, Math.round(Math.max(w, d) / 6));
-    const repV = Math.max(1, Math.round(Math.max(h, d) / 6));
-    const blockTex = getProceduralTexture(texType, color, repU, repV);
+    const blockTex = getProceduralTexture(texType, color, 2, 2);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: blockTex,
@@ -2387,6 +2400,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     chassisMesh.userData = { isCar: true, id }; intersectableObjects.push(chassisMesh); scene.add(group);
  
     const portalClone = model.clone();
+    portalClone.traverse((ch) => {
+      if (ch.isMesh && ch.material) ch.material = ch.material.clone();
+    });
     portalClone.visible = false;
     scene.add(portalClone);
  
@@ -3028,7 +3044,10 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       rp.rig.root.scale.set(d.playerScale, d.playerScale, d.playerScale);
       rp.np.sprite.position.y = 2.85 * d.playerScale;
     }
-    rp.targetPos.set(d.x, d.y - BASE_PLAYER_RADIUS * (rp.remoteScale || 1), d.z); rp.targetRotY = d.yaw || 0;
+    rp.targetPos.set(d.x || 0, (d.y || 0) - BASE_PLAYER_RADIUS * (rp.remoteScale || 1), d.z || 0); rp.targetRotY = d.yaw || 0;
+    if (d.holdingWeapon !== undefined) rp.holdingWeapon = d.holdingWeapon;
+    if (d.holdingItem) rp.holdingItem = d.holdingItem;
+    if (d.isSwinging) rp.swingTimer = 1.0;
     rp.isShattered = !!d.isShattered;
     if (rp.isShattered && d.rag) updateRemoteRagdoll(rp, d.rag); else if (rp.rag) destroyRemoteRagdoll(rp);
     const m = !!d.marble; rp.driving = !!d.driving;
@@ -3772,7 +3791,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       if (outVel.dot(dstPortal.normal) < 6) outVel.addScaledVector(dstPortal.normal, 8);
       p.body.velocity.set(outVel.x, outVel.y, outVel.z);
  
-      const curQ = new THREE.Quaternion(p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.w, p.body.quaternion.z);
+      const curQ = new THREE.Quaternion(p.body.quaternion.x, p.body.quaternion.y, p.body.quaternion.z, p.body.quaternion.w);
       const outQ = transformQuatBetweenPortals(curQ, srcPortal, dstPortal);
       p.body.quaternion.set(outQ.x, outQ.y, outQ.z, outQ.w);
       p.mesh.position.copy(p.body.position);
@@ -4073,7 +4092,7 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
     }
     if (Math.abs(portalCameraRoll) > 0.001) {
       // Portal oyunundaki gibi kamera açısı 90-180 dereceden dik konuma yaylanarak (smooth damping) oturur
-      portalCameraRoll = THREE.MathUtils.damp(portalCameraRoll, 0, 7.5, dt);
+      portalCameraRoll = smoothDamp(portalCameraRoll, 0, 7.5, dt);
       camera.rotation.z = portalCameraRoll;
     } else {
       camera.rotation.z = 0;
@@ -4108,17 +4127,18 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       // Araba tekerlek dönme, direksiyon kırılma ve süspansiyon yatma animasyonu
       const moveDelta = c.group.position.clone().sub(c.prev || c.group.position);
       const localForward = new THREE.Vector3(0, 0, -1).applyQuaternion(c.group.quaternion);
-      const signedSpd = (moveDelta.length() / Math.max(dt, 0.001)) * (moveDelta.dot(localForward) >= 0 ? 1 : -1);
+      const rawSignedSpd = (moveDelta.length() / Math.max(dt, 0.001)) * (moveDelta.dot(localForward) >= 0 ? 1 : -1);
+      const signedSpd = Number.isFinite(rawSignedSpd) ? rawSignedSpd : 0;
       c.prev.copy(c.group.position);
       c.wheelSpin = (c.wheelSpin || 0) - signedSpd * dt * 1.85;
       if (c.wheels) {
         c.wheels.forEach((w) => {
-          w.mesh.rotation.x = c.wheelSpin;
-          if (w.isFront) w.pivot.rotation.y = (c.steer || 0) * 0.85;
+          if (w && w.mesh) w.mesh.rotation.x = c.wheelSpin;
+          if (w && w.isFront && w.pivot) w.pivot.rotation.y = (c.steer || 0) * 0.85;
         });
       }
       if (c.chassisMesh) {
-        c.chassisMesh.rotation.z = THREE.MathUtils.damp(c.chassisMesh.rotation.z || 0, -(c.steer || 0) * Math.min(1, Math.abs(signedSpd) / 15) * 0.14, 10, dt);
+        c.chassisMesh.rotation.z = smoothDamp(c.chassisMesh.rotation.z || 0, -(c.steer || 0) * Math.min(1, Math.abs(signedSpd) / 15) * 0.14, 10, dt);
       }
 
       c.portalClone.visible = false;
@@ -4229,7 +4249,9 @@ body.mobile-mode #vehiclePrompt{bottom:185px;font-size:.78rem}
       syncBodyAABB(rp.body);
     }
  
-    updatePortalViews();
+    try { updatePortalViews(); } catch (e) {}
+    renderer.setRenderTarget(null);
+    renderer.clippingPlanes = [];
     renderer.render(scene, camera);
   }
  
